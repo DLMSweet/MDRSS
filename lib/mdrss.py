@@ -45,11 +45,14 @@ class RSSFeed():
         for chapter in chapters["results"]:
             fe = fg.add_entry()
             fe.id("https://magmadex.org/reader/{}".format(chapter["data"]["id"]))
-            fe.title(chapter["data"]["attributes"]["title"])
             fe.published(chapter["data"]["attributes"]["publishAt"])
             fe.updated(chapter["data"]["attributes"]["updatedAt"])
             fe.link(href="https://magmadex.org/reader/{}".format(chapter["data"]["id"]))
-            fe.description(chapter["data"]["attributes"]["title"])
+            title_desc = "Volume: {} Chapter: {}".format(chapter["data"]["attributes"]["volume"], chapter["data"]["attributes"]["chapter"])
+            if chapter["data"]["attributes"]["title"]:
+                title_desc = title_desc + " - {}".format(chapter["data"]["attributes"]["title"])
+            fe.title(title_desc)
+            fe.description(title_desc)
         return fg.rss_str(pretty=True)
 
     @cache
