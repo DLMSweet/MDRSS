@@ -8,6 +8,7 @@ from flask_pydantic import validate
 from flask_paginate import Pagination, get_page_parameter, get_page_args
 from flask_bootstrap import Bootstrap
 from lib.mdapi import MangadexAPI, APIError
+from lib.mdrss import RSSFeed
 
 app = Quart(__name__)
 app.secret_key = 'much secret very secure'
@@ -15,6 +16,7 @@ Bootstrap(app)
 
 API_URL = "https://api.mangadex.org"
 MDAPI = MangadexAPI(API_URL)
+RSS = RSSFeed(API_URL)
 
 async def convert_legacy_id(lookup_id, lookup_type="manga"):
     """
@@ -109,12 +111,7 @@ async def get_manga_rss(manga_id: Union[UUID, int]):
     """
     if isinstance(manga_id, int):
         manga_id = convert_legacy_id(manga_id)
-    manga = MDAPI.get_manga(manga_id)
-    try:
-        chapters = manga.get_chapters()
-    except APIError:
-        chapters = None
-    return await render_template('feed.rss', manga=manga, chapters=chapters)
+    return Response(RSS.generate_feed(manga_id), mimetype='text/xml')
 
 
 @app.route('/reader/<chapter_id>', methods=["GET"])
