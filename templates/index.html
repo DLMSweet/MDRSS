@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+
+{% block header %}
+  <h1>{% block title %}Search for Manga{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+<div class="jumbotron">
+  <h1 class="display-4">lol how make web site</h1>
+  google pls
+  <p class="lead">Search for Manga </p>
+  <hr class="my-4">
+    <p>
+	  <form method="get">
+      <dl>
+        <dt><label for="search"></label></dt>
+        <dd><input id="search" name="search" type="text" value=""></dd>
+      </dl>
+	</p>
+	<p>
+      <input class="btn btn-primary btn-lg" type="submit" value="Search">
+    </p>
+    </form>
+    <!-- <a href="#" class="btn btn-primary">Go somewhere</a> -->
+  </div>
+</div>
+{% if results %}
+  {% if results | length == 0 %}
+  No results found!
+  {% elif results | length > 0 %}
+  {{ pagination.info }}
+  {{ pagination.links }}
+  <table border=1>
+   <tr>
+    <th>#</th>
+    <th>Title</th>
+    <th>Description</th>
+   </tr>
+   {% for result in results["results"] %}
+   <tr>
+    <td>{{ loop.index + pagination.skip }}</td>
+    <td><a href="{{ url_for("get_manga", manga_id=result["data"]["id"] ) }}">{{ result["data"]["attributes"]["title"]["en"] | safe }}</a></td>
+    <td>{{ result["data"]["attributes"]["description"]["en"] | safe }}</td>
+   </tr>
+   {% endfor %}
+  </table>
+  {{ pagination.links }}
+  {% endif %}
+{% endif %}
+{% endblock %}
+

@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div class="jumbotron">
+  <h1 class="display-4">{{ manga.data["attributes"]["title"]["en"] }}</h1>
+  <hr class="my-4">
+  <p>{{ manga.data["attributes"]["description"]["en"] | safe }}</p>
+</div>
+<div>
+{{ pagination.info }}
+{{ pagination.links }}
+<table class="table">
+ <thead>
+  <tr>
+    <th scope="col">#</th>
+    <th scope="col">Volume</th>
+    <th scope="col">Chapter</th>
+    <th scope="col">Language</th>
+    <th scope="col">Published</th>
+    <th scope="col">Created</th>
+    <th scope="col"></th>
+  </tr>
+ </thead>
+{% for chapter in chapters %}
+  <tr>
+   <th scope="row">{{ loop.index + pagination.skip }}</th>
+   <td>{{ chapter.volume }}</td>
+   <td>{{ chapter.chapter }}</td>
+   <td>{{ chapter.language }}</td>
+   <td>{{ chapter.published }}</td>
+   <td>{{ chapter.created }}</td>
+   <td><a href="{{ url_for('read_chapter', chapter_id=chapter.chapter_id) }}"> Read</a></td>
+  </tr>
+{% endfor %}
+</table>
+{{ pagination.links }}
+</div>
+{% endblock %}
