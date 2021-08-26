@@ -1,0 +1,13 @@
+[Unit]
+Description=Terrible MD Frontend
+After=nginx.service
+
+[Service]
+User=nobody
+WorkingDirectory=/opt/tmdfe
+ExecStart=/opt/tmdfe/venv/bin/hypercorn md_frontend:app -w 8
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+
