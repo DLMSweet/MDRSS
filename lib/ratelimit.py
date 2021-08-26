@@ -57,6 +57,7 @@ class RateLimitDecorator(object):
         :param bool raise_on_limit: A boolean allowing the caller to avoiding rasing an exception.
         '''
         self.__redis = StrictRedis(host="localhost", decode_responses=True)
+        self.logger = logging.getLogger('ratelimit')
         self.clamped_calls = calls
         self.period = period
         self.clock = clock
