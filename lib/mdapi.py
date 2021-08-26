@@ -117,7 +117,11 @@ class Chapter():
         Sends a report about download speed/success/etc to the backend
         """
         report = json.dumps({ "url": image_url, "success": success, "bytes": downloaded_bytes, "duration": duration, "cached": is_cached })
-        requests.post("{}/report".format(self.api_url), data=report)
+        resp = requests.post("https://api.mangadex.network/report", data=report)
+        if not resp.ok:
+            print("Failed to report status of image: {} - {}".format(resp.status_code, resp.reason))
+            print(resp.json())
+            print(report)
 
     async def get_image(self, image, report=True, tries=0):
         """
@@ -138,11 +142,13 @@ class Chapter():
             return await self.get_image(image, report=report, tries=tries+1)
         if data.status_code == 200:
             if report:
+                if data.headers['X-Cache'] == "HIT":
+                    is_cached = True
                 await self.send_report(image_url,
                                  success=True,
                                  downloaded_bytes=len(data.content),
                                  duration=int(data.elapsed.total_seconds()*1000),
-                                 is_cached=data.headers['X-Cache'])
+                                 is_cached=is_cached)
             return data
         # By default, send a failing report. This doesn't get hit if we had a success above.
         if report:
