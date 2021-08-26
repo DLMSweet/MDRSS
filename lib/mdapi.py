@@ -2,20 +2,41 @@ import json
 from json import JSONDecodeError
 import os
 import base64
+from memoization import cached
 import requests
 
 class MangadexAPI():
     def __init__(self, api_url):
         self.api_url = api_url
+
+    @cached
     def get_manga(self, manga_id):
         return Manga(manga_id, self.api_url)
 
+    @cached
     def search_manga(self, title, offset=0):
         search_results = requests.get('{}/manga?title={}&offset={}'.format(self.api_url, title, offset))
         if search_results.status_code == 200:
             return search_results.json()
         return None
 
+    @cached
+    def get_chapter(self, chapter_id):
+        chapter = Chapter(api_url=self.api_url)
+        chapter.load_from_uuid(chapter_id)
+        return chapter
+
+    def cache_stats(self):
+        return json.dumps({"get_manga": { "hits": self.get_manga.cache_info().hits,
+                                          "misses": self.get_manga.cache_info().misses,
+                                          "size": self.get_manga.cache_info().current_size },
+                           "search_manga": { "hits": self.search_manga.cache_info().hits,
+                                             "misses": self.search_manga.cache_info().misses,
+                                             "size": self.search_manga.cache_info().current_size },
+                           "get_chapter": { "hits": self.get_chapter.cache_info().hits,
+                                            "misses": self.get_chapter.cache_info().misses,
+                                            "size": self.get_chapter.cache_info().current_size }
+                            })
 class Chapter():
     def __init__(self, manga=None, data=None, api_url=None):
         self.api_url = api_url
@@ -23,7 +44,7 @@ class Chapter():
         self.manga = manga
         if self.data:
             self.load_data()
-        
+
     def load_data(self):
         self.chapter_id = self.data["data"]["id"]
         self.chapter = self.data['data']['attributes']['chapter']
@@ -53,24 +74,21 @@ class Chapter():
         return images
            
     async def send_report(self, image_url, success=False, downloaded_bytes=0, duration=0, cached=False):
-        print("Sending report for {}".format(image_url))
         report = json.dumps({ "url": image_url, "success": success, "bytes": downloaded_bytes, "duration": duration, "cached": cached })
         requests.post("{}/report".format(self.api_url), data=report)
 
-    def get_image(self, image, report=False):
+    async def get_image(self, image, report=True):
         image_server = self.get_image_server()
         image_url = "{}/data/{}/{}".format(image_server, self.hash, image)
-        print("Grabbing {}".format(image_url))
         try:
             data = requests.get(image_url)
         except requests.exceptions.ConnectionError:
             if report:
-                self.send_report(image_url)
+                await self.send_report(image_url)
             return None
         if data.status_code == 200:
-            print(json.dumps({ "url": image_url, "success": True, "bytes": len(data.content), "duration": int(data.elapsed.total_seconds()*1000), "cached": data.headers['X-Cache'] }))
             if report:
-                self.send_report(image_url, 
+                await self.send_report(image_url, 
                                  success=True, 
                                  downloaded_bytes=len(data.content), 
                                  duration=int(data.elapsed.total_seconds()*1000), 
@@ -78,13 +96,15 @@ class Chapter():
             return data
         # By default, send a failing report. This doesn't get hit if we had a success above.
         if report:
-            self.send_report(image_url)
+            await self.send_report(image_url)
         return None
 
-    def get_image_bytes(self, image):
-        image_data = self.get_image(image)
-        if image_data is None:
+    async def get_image_bytes(self, image, tries=0):
+        if tries > 2:
             return None
+        image_data = await self.get_image(image)
+        if image_data is None:
+            return await self.get_image_bytes(image, tries=tries+1)
         content_type = image_data.headers['content-type']
         encoded_image = base64.b64encode(image_data.content).decode('utf-8')
         return "data:{};base64,{}".format(content_type, encoded_image)
@@ -123,8 +143,9 @@ class Manga():
     def get_chapters(self, limit=10, offset=0):
         response = requests.get('{}/chapter?manga={}&limit={}&offset={}'.format(self.api_url, self.manga_id, limit, offset)).json()
         return [ Chapter(self.manga_id, x, self.api_url) for x in response["results"] ]
-        
+
     def get_total_chapters(self):
         response = requests.get('{}/chapter?manga={}'.format(self.api_url, self.manga_id)).json()
         return response["total"]
+        
 
