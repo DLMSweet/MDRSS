@@ -13,7 +13,6 @@ from math import floor
 import time
 import sys
 import threading
-import logging
 from redis import StrictRedis
 
 def now():
@@ -57,7 +56,6 @@ class RateLimitDecorator(object):
         :param bool raise_on_limit: A boolean allowing the caller to avoiding rasing an exception.
         '''
         self.__redis = StrictRedis(host="localhost", decode_responses=True)
-        self.logger = logging.getLogger('ratelimit')
         self.clamped_calls = calls
         self.period = period
         self.clock = clock
@@ -123,7 +121,6 @@ class RateLimitDecorator(object):
                 # maximum then raise an exception.
                 if self.num_calls > self.clamped_calls:
                     if self.raise_on_limit:
-                        self.logger.warn('Being called too fast, raising exception')
                         raise RateLimitException('too many calls', period_remaining)
                     return
 
