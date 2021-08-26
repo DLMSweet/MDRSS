@@ -47,7 +47,7 @@ def lock(lock_name="global_lock"):
         return inner_wrapper
     return wrapper
 
-class MangadexAPI(dict):
+class MangadexAPI():
     """
     A basic class to handle the Mangadex API
     """
