@@ -35,12 +35,12 @@ async def index():
 
     if request.args.get("search"):
         if per_page:
-            results = MDAPI.search_manga(request.args.get("search"), offset=offset)
+            total_results, results = MDAPI.search_manga(request.args.get("search"), offset=offset)
         if results:
             pagination = get_pagination(
                 p=page,
                 pp=per_page,
-                total=results["total"],
+                total=total_results,
                 record_name="Manga",
                 format_total=True,
                 format_number=True,

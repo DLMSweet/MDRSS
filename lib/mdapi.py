@@ -2,6 +2,7 @@
 import logging
 import time
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import base64
 from redis import StrictRedis
 from ratelimit import limits, sleep_and_retry
@@ -16,16 +17,33 @@ class APIError(Exception):
     There was an error getting information from the API
     """
 
+class APIRateLimit(Exception):
+    """
+    We're trying to hit the API too fast
+    """
+
 def cache(func):
     def wrapper(*args, **kwargs):
         if REDIS.exists(str(kwargs['request_uri'])):
             module_logger.debug("Got {} from cache".format(kwargs['request_uri']))
             return json.loads(REDIS.get(str(kwargs['request_uri'])))
-        response =  func(*args, **kwargs)
+        response = func(*args, **kwargs)
         if response:
-            REDIS.setex(str(kwargs['request_uri']), 60, json.dumps(response))
-            module_logger.debug("Put {} into cache with 1m TTL".format(kwargs['request_uri']))
+            REDIS.setex(str(kwargs['request_uri']), 300, json.dumps(response))
+            module_logger.debug("Put {} into cache with 5m TTL".format(kwargs['request_uri']))
         return response
+    return wrapper
+
+def lock(lock_name="global_lock"):
+    def wrapper(func):
+        def inner_wrapper(*args, **kwargs):
+            try:
+                with REDIS.lock(lock_name, blocking_timeout=5) as lock:
+                    results = func(*args, **kwargs)
+            except LockError:
+                results = None
+            return results
+        return inner_wrapper
     return wrapper
 
 class MangadexAPI(dict):
@@ -49,7 +67,21 @@ class MangadexAPI(dict):
         """
         Returns search results or None if nothing is found
         """
-        return self.make_request('manga?title={}&offset={}'.format(title, offset))
+        results = self.make_request(request_uri='manga?title={}&offset={}'.format(title, offset))
+        return_results = []
+        if results["results"]:
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                future_to_manga = {executor.submit(Manga, x["data"]["id"], api=self): x for x in results['results']}
+                for future in as_completed(future_to_manga):
+                    manga = future_to_manga[future]
+                    try:
+                        manga_cl = future.result()
+                    except Exception as exc:
+                        print('Generated an exception: {}'.format(exc))
+                    else:
+                        return_results.append(manga_cl)
+            return (results["total"], return_results)
+        return None
 
     def get_chapter(self, chapter_id):
         """
@@ -64,6 +96,7 @@ class MangadexAPI(dict):
         return chapter
 
     @cache
+    @lock(lock_name="api_server")
     @sleep_and_retry
     @limits(calls=5, period=1)    
     def make_request(self, request_uri=None):
@@ -71,7 +104,7 @@ class MangadexAPI(dict):
         Class to handle making requests to the MD API, rate limited
         """
         try:
-            self.logger.debug("Calling API with: {}".format(request_uri))
+            self.logger.warning("UNCACHED: Calling API with: {}".format(request_uri))
             response = requests.get('{}/{}'.format(self.api_url, request_uri))
             if response.ok:
                 try:
@@ -80,9 +113,8 @@ class MangadexAPI(dict):
                     raise APIError("Failed to get valid response for {}".format(request_uri))
             elif response.status_code == 429:
                 # Rate limited. Sleep for a second before continuing. TODO: Remove or refactor
-                time.sleep(1)
                 self.logger.error("Being ratelimited by the API, please slow down")
-                raise APIError(response.status_code)
+                raise APIRateLimit(response.status_code)
             else:
                 # Response wasn't okay
                 self.logger.error('{}/{}'.format(self.api_url, request_uri))
@@ -132,7 +164,6 @@ class Chapter():
         self.language = self.data['data']['attributes']['translatedLanguage']
         self.hash = self.data['data']['attributes']['hash']
         self.image_list = self.data['data']['attributes']['data']
-        self.image_server = self.get_image_server()
 
     def load_from_uuid(self, chapter_id, tries=0):
         """
@@ -142,11 +173,18 @@ class Chapter():
         self.data = response
         self.load_data()
 
+    @lock(lock_name="image_server")
     def get_image_server(self):
         """
         Attempt to get a MD@H node to pull images from
         """
-        response = self.api.make_request(request_uri='at-home/server/{}'.format(self.chapter_id))
+        if REDIS.exists('at-home/server/{}'.format(self.chapter_id)):
+            return json.loads(REDIS.get('at-home/server/{}'.format(self.chapter_id)))["baseUrl"]
+        try:
+            response = self.api.make_request(request_uri='at-home/server/{}'.format(self.chapter_id))
+        except APIRateLimit:
+            time.sleep(1)
+            return self.get_image_server()
         return response["baseUrl"]
 
 
@@ -156,6 +194,8 @@ class Chapter():
         directly into a <img> or pass them to something else
         """
         images = []
+        if self.image_server is None:
+            self.image_server = self.get_image_server()
         for image in self.image_list:
             images.append("{}/data/{}/{}".format(self.image_server, self.hash, image))
         return images
@@ -173,7 +213,10 @@ class Chapter():
         image_url = "{}/data/{}/{}".format(self.image_server, self.hash, image)
         try:
             data = requests.get(image_url)
-        except requests.exceptions.ConnectionError:
+        except requests.exceptions.ConnectionError as e:
+            self.logger.error("Failed to connect to {} - {}".format(self.image_server, e))
+            self.logger.error("Removing failing server from Redis cache")
+            REDIS.delete('at-home/server/{}'.format(self.chapter_id))
             if report:
                 await self.api.send_report(image_url)
             # Give the system time to breathe. TODO: Remove
@@ -229,7 +272,9 @@ class Manga():
             self.manga_id = self.convert_legacy_id(manga_id)
         else:
             self.manga_id = manga_id
-
+        self.load_data()
+        
+    def load_data(self):
         self.data = self.api.make_request(request_uri='manga/{}'.format(self.manga_id))["data"]
         self.title = self.data["attributes"]["title"]["en"]
         parser = bbcode.Parser(escape_html=False)
