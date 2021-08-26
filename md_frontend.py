@@ -112,7 +112,7 @@ async def get_manga(manga_id: Union[UUID, int]):
 @validate()
 async def get_manga_rss(manga_id: Union[UUID, int]):
     """
-    Currently unfinished, at some point will be a RSS feed generator
+    RSS feed generator
     """
     if request.args.get("lang"):
         language_filter = request.args.getlist("lang")
@@ -123,6 +123,21 @@ async def get_manga_rss(manga_id: Union[UUID, int]):
         abort(404)
     return Response(feed_data, mimetype='text/xml')
 
+
+@app.route('/atom/manga/<manga_id>', methods=["GET"])
+@validate()
+async def get_manga_atom(manga_id: Union[UUID, int]):
+    """
+    Atom feed generator
+    """
+    if request.args.get("lang"):
+        language_filter = request.args.getlist("lang")
+        feed_data = RSS.generate_feed(manga_id, language_filter=language_filter, type="atom")
+    else:
+        feed_data = RSS.generate_feed(manga_id, type="atom")
+    if feed_data is None:
+        abort(404)
+    return Response(feed_data, mimetype='text/xml')
 
 @app.route('/reader/<chapter_id>', methods=["GET"])
 @validate()

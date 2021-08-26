@@ -46,7 +46,7 @@ class RSSFeed():
         self.logger = logging.getLogger('mdapi.rss')
         self.api_url = api_url
 
-    def generate_feed(self, manga_id, language_filter=["en"]):
+    def generate_feed(self, manga_id, language_filter=["en"], type="rss"):
         if isinstance(manga_id, int):
             manga_id = self.convert_legacy_id(manga_id)
         if manga_id is None:
@@ -58,7 +58,8 @@ class RSSFeed():
         fg = FeedGenerator()
         fg.id(manga["data"]["attributes"]["title"]["en"])
         fg.title(manga["data"]["attributes"]["title"]["en"])
-        fg.link(href="https://magmadex.org/{}/rss".format(manga_id))
+        fg.link(href="https://magmadex.org/manga/{}".format(manga_id))
+        fg.link(href="https://magmadex.org/rss/manga/{}".format(manga_id), rel="self")
         fg.description(manga["data"]["attributes"]["description"]["en"])
         
         for chapter in chapters["results"]:
@@ -67,11 +68,14 @@ class RSSFeed():
             fe.published(chapter["data"]["attributes"]["publishAt"])
             fe.updated(chapter["data"]["attributes"]["updatedAt"])
             fe.link(href="https://magmadex.org/reader/{}".format(chapter["data"]["id"]))
+
             title_desc = "{} - Chapter {}".format(manga["data"]["attributes"]["title"]["en"], chapter["data"]["attributes"]["chapter"])
             if chapter["data"]["attributes"]["title"]:
                 title_desc = title_desc + " | {}".format(chapter["data"]["attributes"]["title"])
             fe.title(title_desc)
             fe.description(title_desc)
+        if type == "atom":
+            return fg.atom_str(pretty=True)
         return fg.rss_str(pretty=True)
 
     @cache
