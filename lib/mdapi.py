@@ -8,6 +8,7 @@ from redis import StrictRedis
 from ratelimit import limits, sleep_and_retry
 import requests
 import bbcode
+from pprint import pprint
 
 module_logger = logging.getLogger('mdapi')
 REDIS = StrictRedis(host="localhost", decode_responses=True)
@@ -156,14 +157,22 @@ class Chapter():
         Copy the data out into attributes to make it easier to
         read without dealing with the JSON object
         """
-        self.chapter_id = self.data["data"]["id"]
-        self.chapter = self.data['data']['attributes']['chapter']
-        self.volume = self.data['data']['attributes']['volume']
-        self.published = self.data['data']['attributes']['publishAt']
-        self.created = self.data['data']['attributes']['createdAt']
-        self.language = self.data['data']['attributes']['translatedLanguage']
-        self.hash = self.data['data']['attributes']['hash']
-        self.image_list = self.data['data']['attributes']['data']
+        try:
+            self.chapter_id = self.data["data"]["id"]
+            self.chapter = self.data['data']['attributes']['chapter']
+            self.volume = self.data['data']['attributes']['volume']
+            self.published = self.data['data']['attributes']['publishAt']
+            self.created = self.data['data']['attributes']['createdAt']
+            self.language = self.data['data']['attributes']['translatedLanguage']
+            self.hash = self.data['data']['attributes']['hash']
+            self.image_list = self.data['data']['attributes']['data']
+            self.manga = [x['id'] for x in self.data['relationships'] if x['type'] == 'manga'][0]
+        except KeyError:
+            pprint(self.data)
+            raise
+        except TypeError:
+            pprint(self.data['relationships'])
+            raise
 
     def load_from_uuid(self, chapter_id, tries=0):
         """
