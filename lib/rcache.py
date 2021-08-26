@@ -1,4 +1,13 @@
+"""
+You almost certainly wouldn't want to use this as-is in a different project.
+This works here because the functions we're caching are hitting the same API with the
+same arguments, and should be getting the same results. But if you had two functions,
+add_2(x) and add_1(x) that did what they say and you tried to cache with this, you
+would run into errors since this *only* looks at the arguments and not the function.
+"""
 # pylint: disable=line-too-long
+# pylint: disable=logging-format-interpolation
+# pylint: disable=missing-module-docstring
 import logging
 from functools import partial
 import json

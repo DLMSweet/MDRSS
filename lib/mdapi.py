@@ -8,7 +8,6 @@ from uuid import UUID
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import base64
 from redis import StrictRedis
-from ratelimit import limits, sleep_and_retry
 import requests
 import bbcode
 from lib.rcache import DistributedCache as rcache
@@ -55,7 +54,7 @@ class MangadexAPI():
         If we were given a legacy ID, figure out what the new UUID is
         """
         payload = json.dumps({ "type": "manga", "ids": [ manga_id ] })
-        response = self.make_request('legacy/mapping', payload=payload, type="POST")
+        response = self.make_request('legacy/mapping', payload=payload, req_type="POST")
         try:
             new_uuid = response[0]["data"]["attributes"]["newId"]
             self.logger.debug("Converted legacy ID {} to new UUID {}".format(manga_id, new_uuid))
@@ -107,21 +106,21 @@ class MangadexAPI():
         chapter = Chapter(api=self)
         try:
             chapter.load_from_uuid(chapter_id)
-        except APIError as e:
-            self.logger.error("Failed to return chapter: {}".format(e))
+        except APIError as exc:
+            self.logger.error("Failed to return chapter: {}".format(exc))
             raise
         return chapter
 
-#    @rcache
+    @rcache
     @sleep_and_retry
     @ratelimit(calls=5, period=1)
-    def make_request(self, request_uri, payload=None, type="GET"):
+    def make_request(self, request_uri, payload=None, req_type="GET"):
         """
         Class to handle making requests to the MD API, rate limited
         """
         try:
             self.logger.warning("UNCACHED: Calling API with: {}".format(request_uri))
-            if type == "POST":
+            if req_type == "POST":
                 response = requests.post('{}/{}'.format(self.api_url, request_uri), data=payload)
             else:
                 response = requests.get('{}/{}'.format(self.api_url, request_uri))
@@ -130,18 +129,17 @@ class MangadexAPI():
             if response.ok:
                 try:
                     return response.json()
-                except json.decoder.JSONDecodeError:
-                    raise APIError("Failed to get valid response for {}".format(request_uri))
+                except json.decoder.JSONDecodeError as invalid_response:
+                    raise APIError("Failed to get valid response for {}".format(request_uri)) from invalid_response
             elif response.status_code == 429:
-                # Rate limited. Sleep for a second before continuing. TODO: Remove or refactor
                 self.logger.error("Being ratelimited by the API, please slow down")
-                raise RateLimitException(response.status_code, 1)
+                raise RateLimitException(response.status_code, 1) 
             else:
                 # Response wasn't okay
                 self.logger.error('{}/{}'.format(self.api_url, request_uri))
                 raise APIError(response.status_code)
-        except requests.exceptions.ConnectionError:
-            raise APIError("Failed to connect to {}".format(self.api_url))
+        except requests.exceptions.ConnectionError as connection_error:
+            raise APIError("Failed to connect to {}".format(self.api_url)) from connection_error
         return None
 
     async def send_report(self, image_url, success=False, downloaded_bytes=0, duration=0, is_cached=False):
@@ -237,8 +235,8 @@ class Chapter():
         image_url = "{}/data/{}/{}".format(self.image_server, self.hash, image)
         try:
             data = requests.get(image_url)
-        except requests.exceptions.ConnectionError as e:
-            self.logger.error("Failed to connect to {} - {}".format(self.image_server, e))
+        except requests.exceptions.ConnectionError as exc:
+            self.logger.error("Failed to connect to {} - {}".format(self.image_server, exc))
             self.logger.error("Removing failing server from Redis cache")
             REDIS.delete('at-home/server/{}'.format(self.chapter_id))
             if report:

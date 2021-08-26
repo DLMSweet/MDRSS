@@ -6,12 +6,13 @@ Additionally this module includes a naive retry strategy to be used in
 conjunction with the rate limit decorator.
 
 Original code from: https://github.com/tomasbasham/ratelimit
+Modified to use redis for locking and timing
 '''
+# pylint: disable=line-too-long
+# pylint: disable=logging-format-interpolation
+# pylint: disable=missing-module-docstring
 from functools import wraps
-from math import floor
-
 import time
-import sys
 import threading
 import logging
 from redis import StrictRedis
@@ -41,7 +42,7 @@ class RateLimitException(Exception):
         super(RateLimitException, self).__init__(message)
         self.period_remaining = period_remaining
 
-class RateLimitDecorator(object):
+class RateLimitDecorator():
     '''
     Rate limit decorator class.
     '''
@@ -77,7 +78,7 @@ class RateLimitDecorator(object):
     @num_calls.setter
     def num_calls(self, calls):
         self.__redis.set("rl_numcalls", calls)
-        
+
     @property
     def last_reset(self):
         return float(self.__redis.get("rl_last_reset"))
@@ -126,7 +127,7 @@ class RateLimitDecorator(object):
                 if self.num_calls > self.clamped_calls:
                     if self.raise_on_limit:
                         raise RateLimitException('too many calls', period_remaining)
-                    return
+                    return None
 
             return func(*args, **kargs)
         return wrapper
