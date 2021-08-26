@@ -3,11 +3,11 @@ import json
 from typing import Union
 import requests
 import quart.flask_patch
-from quart import Quart, flash, render_template, request
+from quart import Quart, flash, render_template, request, Response, make_push_promise, url_for
 from flask_pydantic import validate
 from flask_paginate import Pagination, get_page_parameter, get_page_args
 from flask_bootstrap import Bootstrap
-from lib.mdapi import MangadexAPI, Chapter
+from lib.mdapi import MangadexAPI
 
 app = Quart(__name__)
 app.secret_key = 'much secret very secure'
@@ -82,8 +82,12 @@ async def get_manga(manga_id: Union[UUID, int]):
             page_parameter="p",
             per_page_parameter="pp",
         )
+    await make_push_promise(url_for('static', filename='css/style.css'))
+    await make_push_promise(url_for('static', filename='css/bootstrap.min.css'))
+    await make_push_promise(url_for('static', filename='js/jquery-3.2.1.slim.min.js'))
+    await make_push_promise(url_for('static', filename='js/popper.min.js'))
+    await make_push_promise(url_for('static', filename='js/bootstrap.min.js'))
     return await render_template('manga.html', manga=manga, chapters=chapters, pagination=pagination)
-
 
 @app.route('/manga/<manga_id>/rss', methods=["GET"])
 @validate()
@@ -106,17 +110,21 @@ async def read_chapter(chapter_id: UUID):
     loading images directly from the MD@H network
     """
     chapter = MDAPI.get_chapter(chapter_id)
+    await make_push_promise(url_for('static', filename='reader.css'))
     return await render_template('reader.html', chapter=chapter)
 
 @app.route('/reader/<chapter_id>/<image_id>', methods=["GET"])
 @validate()
-async def get_image(chapter_id: UUID):
+async def get_image(chapter_id: UUID, image_id: str):
     """
-    Returns the reader page for a chapter,
-    loading images directly from the MD@H network
+    Returns an image from the MD@H network
+    Done this way to provide timing and response data to the MD@H network
     """
     chapter = MDAPI.get_chapter(chapter_id)
-    return await render_template('reader.html', chapter=chapter)
+    image_resp = await chapter.get_image(image_id)
+    response = Response(image_resp.content)
+    response.headers['Content-Type'] = image_resp.headers['Content-Type']
+    return response
 
 def get_pagination(**kwargs):
     """Returns pagination settings"""

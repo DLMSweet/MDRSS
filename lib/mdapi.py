@@ -83,6 +83,7 @@ class Chapter():
         self.language = self.data['data']['attributes']['translatedLanguage']
         self.hash = self.data['data']['attributes']['hash']
         self.image_list = self.data['data']['attributes']['data']
+        self.image_server = self.get_image_server()
 
     def load_from_uuid(self, chapter_id):
         """
@@ -106,10 +107,9 @@ class Chapter():
         Get the URLs for the images, in case we want to stick them
         directly into a <img> or pass them to something else
         """
-        image_server = self.get_image_server()
         images = []
         for image in self.image_list:
-            images.append("{}/data/{}/{}".format(image_server, self.hash, image))
+            images.append("{}/data/{}/{}".format(self.image_server, self.hash, image))
         return images
 
     async def send_report(self, image_url, success=False, downloaded_bytes=0, duration=0, is_cached=False):
@@ -119,18 +119,23 @@ class Chapter():
         report = json.dumps({ "url": image_url, "success": success, "bytes": downloaded_bytes, "duration": duration, "cached": is_cached })
         requests.post("{}/report".format(self.api_url), data=report)
 
-    async def get_image(self, image, report=True):
+    async def get_image(self, image, report=True, tries=0):
         """
         Returns an image in a requests Response object
         """
-        image_server = self.get_image_server()
-        image_url = "{}/data/{}/{}".format(image_server, self.hash, image)
+        if tries > 0:
+            # Get a new image server
+            self.image_server = self.get_image_server()
+        if tries > 3:
+            # Guess we'll die
+            return None
+        image_url = "{}/data/{}/{}".format(self.image_server, self.hash, image)
         try:
             data = requests.get(image_url)
         except requests.exceptions.ConnectionError:
             if report:
                 await self.send_report(image_url)
-            return None
+            return await self.get_image(image, report=report, tries=tries+1)
         if data.status_code == 200:
             if report:
                 await self.send_report(image_url,
