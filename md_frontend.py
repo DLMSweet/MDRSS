@@ -114,7 +114,11 @@ async def get_manga_rss(manga_id: Union[UUID, int]):
     """
     Currently unfinished, at some point will be a RSS feed generator
     """
-    feed_data = RSS.generate_feed(manga_id)
+    if request.args.get("lang"):
+        language_filter = request.args.getlist("lang")
+        feed_data = RSS.generate_feed(manga_id, language_filter=language_filter)
+    else:
+        feed_data = RSS.generate_feed(manga_id)
     if feed_data is None:
         abort(404)
     return Response(feed_data, mimetype='text/xml')
