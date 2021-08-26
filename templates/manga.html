@@ -1,7 +1,12 @@
 {% extends 'base.html' %}
 
-{% block content %}
+{% block navitems %}
+<li class="nav-item">
+    <a class="nav-link" href="{{url_for('get_manga_rss', manga_id=manga.manga_id) }}">RSS Feed</a>
+</li>
+{% endblock %}
 
+{% block content %}
 <div class="jumbotron">
   <h1 class="display-4">{{ manga.title }}</h1>
   <hr class="my-4">

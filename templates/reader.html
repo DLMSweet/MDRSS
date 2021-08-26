@@ -7,6 +7,9 @@
 
 {% block navitems %}
 <li class="nav-item">
+    <a class="nav-link" href="{{url_for('get_manga_rss', manga_id=chapter.manga) }}">RSS Feed</a>
+</li>
+<li class="nav-item">
     <a class="nav-link" href="{{url_for('get_manga', manga_id=chapter.manga) }}">Back to Manga</a>
 </li>
 {% endblock %}
