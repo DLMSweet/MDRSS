@@ -191,7 +191,9 @@ class Manga():
 
         self.data = requests.get('{}/manga/{}'.format(self.api_url, self.manga_id)).json()["data"]
         self.title = self.data["attributes"]["title"]["en"]
-        self.description = bbcode.render_html(self.data["attributes"]["description"]["en"]).replace("&amp;", "&")
+        parser = bbcode.Parser(escape_html=False)
+        parser.add_simple_formatter('spoiler', '<span class="spoiler">%(value)s</span>')
+        self.description = parser.format(self.data["attributes"]["description"]["en"])
         self.alt_titles = self.data["attributes"]["altTitles"]
 
     def convert_legacy_id(self, manga_id):

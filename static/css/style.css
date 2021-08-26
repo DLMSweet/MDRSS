@@ -15,3 +15,12 @@ html {width:80%; margin: auto; }
     padding: .1em .25em;
     font-size: 150%;
 }
+
+.spoiler { 
+  color: black; 
+  background-color:black;
+}
+
+.spoiler:hover { 
+  background-color:white; 
+  }
