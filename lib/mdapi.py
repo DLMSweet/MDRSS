@@ -14,7 +14,7 @@ from lib.rcache import DistributedCache as rcache
 from lib.ratelimit import RateLimitDecorator as ratelimit
 from lib.ratelimit import RateLimitException, sleep_and_retry
 
-logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.WARNING)
+logging.basicConfig(filename='/tmp/tmdfe.log', format='%(asctime)s - %(levelname)s - %(message)s', level=logging.DEBUG)
 module_logger = logging.getLogger('mdapi')
 REDIS = StrictRedis(host="localhost", decode_responses=True)
 
@@ -200,9 +200,13 @@ class Chapter():
         """
         Attempt to get a MD@H node to pull images from
         """
+        self.logger.debug("Getting image server")
         if REDIS.exists('at-home/server/{}'.format(self.chapter_id)):
-            return json.loads(REDIS.get('at-home/server/{}'.format(self.chapter_id)))["baseUrl"]
+            image_server = json.loads(REDIS.get('at-home/server/{}'.format(self.chapter_id)))["baseUrl"]
+            self.logger.debug("Returning image server from cache: {}".format(image_server))
+            return image_server
         try:
+            self.logger.debug("Requesting an image server for {}".format(self.chapter_id))
             response = self.api.make_request('at-home/server/{}'.format(self.chapter_id))
         except RateLimitException:
             time.sleep(1)
@@ -228,9 +232,11 @@ class Chapter():
         """
         if tries > 0 or self.image_server is None:
             # Get a new image server
+            self.logger.debug("Getting image server, tries: {} | Chapter: {}".format(tries, self.chapter_id))
             self.image_server = self.get_image_server()
         if tries > 3:
             # Guess we'll die
+            self.logger.warn("Failed to get images for chapter: {}".format(self.chapter_id))
             return None
         image_url = "{}/data/{}/{}".format(self.image_server, self.hash, image)
         try:
@@ -241,7 +247,7 @@ class Chapter():
             REDIS.delete('at-home/server/{}'.format(self.chapter_id))
             if report:
                 await self.api.send_report(image_url)
-            # Give the system time to breathe. TODO: Remove
+            # Give the system time to breathe after we apparently pissed it off.
             time.sleep(1)
             return await self.get_image(image, report=report, tries=tries+1)
         if data.status_code == 200:
