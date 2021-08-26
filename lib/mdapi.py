@@ -1,11 +1,34 @@
 # pylint: disable=line-too-long
+import logging
+import time
 import json
 import base64
-from memoization import cached
+from redis import StrictRedis
+from ratelimit import limits, sleep_and_retry
 import requests
 import bbcode
 
-class MangadexAPI():
+module_logger = logging.getLogger('mdapi')
+REDIS = StrictRedis(host="localhost", decode_responses=True)
+
+class APIError(Exception):
+    """
+    There was an error getting information from the API
+    """
+
+def cache(func):
+    def wrapper(*args, **kwargs):
+        if REDIS.exists(str(kwargs['request_uri'])):
+            module_logger.debug("Got {} from cache".format(kwargs['request_uri']))
+            return json.loads(REDIS.get(str(kwargs['request_uri'])))
+        response =  func(*args, **kwargs)
+        if response:
+            REDIS.setex(str(kwargs['request_uri']), 60, json.dumps(response))
+            module_logger.debug("Put {} into cache with 1m TTL".format(kwargs['request_uri']))
+        return response
+    return wrapper
+
+class MangadexAPI(dict):
     """
     A basic class to handle the Mangadex API
     """
@@ -13,61 +36,86 @@ class MangadexAPI():
         """
         Does very little. Just holds the API url
         """
+        self.logger = logging.getLogger('mdapi.api')
         self.api_url = api_url
 
-    @cached
     def get_manga(self, manga_id):
         """
         Returns a Manga based on it's UUID
         """
-        return Manga(manga_id, self.api_url)
+        return Manga(manga_id, api=self)
 
-    @cached
     def search_manga(self, title, offset=0):
         """
         Returns search results or None if nothing is found
         """
-        search_results = requests.get('{}/manga?title={}&offset={}'.format(self.api_url, title, offset))
-        if search_results.status_code == 200:
-            return search_results.json()
-        return None
+        return self.make_request('manga?title={}&offset={}'.format(title, offset))
 
-    @cached
     def get_chapter(self, chapter_id):
         """
         Returns a chapter based on it's ID
         """
-        chapter = Chapter(api_url=self.api_url)
-        chapter.load_from_uuid(chapter_id)
+        chapter = Chapter(api=self)
+        try:
+            chapter.load_from_uuid(chapter_id)
+        except APIError as e:
+            self.logger.error("Failed to return chapter: {}".format(e))
+            raise
         return chapter
 
-    def cache_stats(self):
+    @cache
+    @sleep_and_retry
+    @limits(calls=5, period=1)    
+    def make_request(self, request_uri=None):
         """
-        Prints some stats out about how the cache is doing
+        Class to handle making requests to the MD API, rate limited
         """
-        # pylint: disable=no-member
-        return json.dumps({"get_manga": { "hits": self.get_manga.cache_info().hits,
-                                          "misses": self.get_manga.cache_info().misses,
-                                          "size": self.get_manga.cache_info().current_size },
-                           "search_manga": { "hits": self.search_manga.cache_info().hits,
-                                             "misses": self.search_manga.cache_info().misses,
-                                             "size": self.search_manga.cache_info().current_size },
-                           "get_chapter": { "hits": self.get_chapter.cache_info().hits,
-                                            "misses": self.get_chapter.cache_info().misses,
-                                            "size": self.get_chapter.cache_info().current_size }
-                            })
+        try:
+            self.logger.debug("Calling API with: {}".format(request_uri))
+            response = requests.get('{}/{}'.format(self.api_url, request_uri))
+            if response.ok:
+                try:
+                    return response.json()
+                except json.decoder.JSONDecodeError:
+                    raise APIError("Failed to get valid response for {}".format(request_uri))
+            elif response.status_code == 429:
+                # Rate limited. Sleep for a second before continuing. TODO: Remove or refactor
+                time.sleep(1)
+                self.logger.error("Being ratelimited by the API, please slow down")
+                raise APIError(response.status_code)
+            else:
+                # Response wasn't okay
+                self.logger.error('{}/{}'.format(self.api_url, request_uri))
+                raise APIError(response.status_code)
+        except requests.exceptions.ConnectionError:
+            raise APIError("Failed to connect to {}".format(self.api_url))
+        return None
+
+    async def send_report(self, image_url, success=False, downloaded_bytes=0, duration=0, is_cached=False):
+        """
+        Sends a report about download speed/success/etc to the backend
+        """
+        report = json.dumps({ "url": image_url, "success": success, "bytes": downloaded_bytes, "duration": duration, "cached": is_cached })
+        resp = requests.post("https://api.mangadex.network/report", data=report)
+        if not resp.ok:
+            self.logger.info("Failed to report status of image: {} - {}".format(resp.status_code, resp.reason))
+            self.logger.debug(resp.json())
+            self.logger.debug(report)
+
 class Chapter():
     """
     A Chapter object used to get information about a chapter and
     to pull images for the chapter, including getting a MD@H node
     """
-    def __init__(self, manga=None, data=None, api_url=None):
+    def __init__(self, manga=None, data=None, api=None):
         """
         Just inits the object, nothing to see here. move along
         """
-        self.api_url = api_url
+        self.logger = logging.getLogger('mdapi.chapter')
+        self.api = api
         self.data = data
         self.manga = manga
+        self.image_server = None
         if self.data:
             self.load_data()
 
@@ -86,22 +134,21 @@ class Chapter():
         self.image_list = self.data['data']['attributes']['data']
         self.image_server = self.get_image_server()
 
-    def load_from_uuid(self, chapter_id):
+    def load_from_uuid(self, chapter_id, tries=0):
         """
         Get the chapter information from the API based on the UUID
         """
-        self.data = requests.get('{}/chapter/{}'.format(self.api_url, chapter_id)).json()
+        response = self.api.make_request(request_uri='chapter/{}'.format(chapter_id))
+        self.data = response
         self.load_data()
 
     def get_image_server(self):
         """
         Attempt to get a MD@H node to pull images from
         """
-        try:
-            return requests.get('{}/at-home/server/{}'.format(self.api_url, self.chapter_id)).json()["baseUrl"]
-        except:
-            print("Failed to get image server to use for downloads")
-            raise Exception
+        response = self.api.make_request(request_uri='at-home/server/{}'.format(self.chapter_id))
+        return response["baseUrl"]
+
 
     def get_image_urls(self):
         """
@@ -113,22 +160,11 @@ class Chapter():
             images.append("{}/data/{}/{}".format(self.image_server, self.hash, image))
         return images
 
-    async def send_report(self, image_url, success=False, downloaded_bytes=0, duration=0, is_cached=False):
-        """
-        Sends a report about download speed/success/etc to the backend
-        """
-        report = json.dumps({ "url": image_url, "success": success, "bytes": downloaded_bytes, "duration": duration, "cached": is_cached })
-        resp = requests.post("https://api.mangadex.network/report", data=report)
-        if not resp.ok:
-            print("Failed to report status of image: {} - {}".format(resp.status_code, resp.reason))
-            print(resp.json())
-            print(report)
-
     async def get_image(self, image, report=True, tries=0):
         """
         Returns an image in a requests Response object
         """
-        if tries > 0:
+        if tries > 0 or self.image_server is None:
             # Get a new image server
             self.image_server = self.get_image_server()
         if tries > 3:
@@ -139,13 +175,17 @@ class Chapter():
             data = requests.get(image_url)
         except requests.exceptions.ConnectionError:
             if report:
-                await self.send_report(image_url)
+                await self.api.send_report(image_url)
+            # Give the system time to breathe. TODO: Remove
+            time.sleep(1)
             return await self.get_image(image, report=report, tries=tries+1)
         if data.status_code == 200:
             if report:
                 if data.headers['X-Cache'] == "HIT":
                     is_cached = True
-                await self.send_report(image_url,
+                else:
+                    is_cached = False
+                await self.api.send_report(image_url,
                                  success=True,
                                  downloaded_bytes=len(data.content),
                                  duration=int(data.elapsed.total_seconds()*1000),
@@ -153,7 +193,7 @@ class Chapter():
             return data
         # By default, send a failing report. This doesn't get hit if we had a success above.
         if report:
-            await self.send_report(image_url)
+            await self.api.send_report(image_url)
         return None
 
     async def get_image_bytes(self, image, tries=0):
@@ -179,17 +219,18 @@ class Manga():
     """
     Basic class to handle manga
     """
-    def __init__(self, manga_id, api_url):
+    def __init__(self, manga_id, api):
         """
         Nothing to see here, move along.
         """
-        self.api_url = api_url
+        self.logger = logging.getLogger('mdapi.manga')
+        self.api = api
         if isinstance(manga_id, int):
             self.manga_id = self.convert_legacy_id(manga_id)
         else:
             self.manga_id = manga_id
 
-        self.data = requests.get('{}/manga/{}'.format(self.api_url, self.manga_id)).json()["data"]
+        self.data = self.api.make_request(request_uri='manga/{}'.format(self.manga_id))["data"]
         self.title = self.data["attributes"]["title"]["en"]
         parser = bbcode.Parser(escape_html=False)
         parser.add_simple_formatter('spoiler', '<span class="spoiler">%(value)s</span>')
@@ -201,16 +242,16 @@ class Manga():
         If we were given a legacy ID, figure out what the new UUID is
         """
         payload = json.dumps({ "type": "manga", "ids": [ manga_id ] })
-        return requests.post('{}/legacy/mapping'.format(self.api_url), data=payload).json()[0]["data"]["attributes"]["newId"]
+        new_uuid = requests.post('{}/legacy/mapping'.format(self.api), data=payload).json()[0]["data"]["attributes"]["newId"]
+        self.logger.debug("Converted legacy ID {} to new UUID {}".format(manga_id, new_uuid))
+        return new_uuid
 
     def get_chapters(self, limit=10, offset=0, language="en"):
         """
         Returns a list of chapters for this Manga
         """
         # TODO: Come back to this later. Search said 54 results, only 26 actually returned with offsets.
-        #response = requests.get('{}/chapter?manga={}&limit={}&offset={}&translatedLanguage={}'.format(self.api_url, self.manga_id, limit, offset, language))
-        response = requests.get('{}/chapter?manga={}&limit={}&offset={}'.format(self.api_url, self.manga_id, limit, offset))
-        if response.status_code == 204:
-            return []
-        self.total_chapters = response.json()["total"]
-        return [ Chapter(self.manga_id, x, self.api_url) for x in response.json()["results"] ]
+        #response = requests.get('{}/chapter?manga={}&limit={}&offset={}&translatedLanguage={}'.format(self.api, self.manga_id, limit, offset, language))
+        response = self.api.make_request(request_uri='chapter?manga={}&limit={}&offset={}'.format(self.manga_id, limit, offset))
+        self.total_chapters = response["total"]
+        return [ Chapter(self.manga_id, x, self.api) for x in response["results"] ]
