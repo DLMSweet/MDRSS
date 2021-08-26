@@ -132,7 +132,7 @@ async def get_manga_atom(manga_id: Union[UUID, int]):
     """
     if request.args.get("lang"):
         language_filter = request.args.getlist("lang")
-        feed_data = RSS.generate_feed(manga_id, language_filter=language_filter, type="atom")
+        feed_data = RSS.generate_feed(manga_id, language_filter=language_filter, feedtype="atom")
     else:
         feed_data = RSS.generate_feed(manga_id, type="atom")
     if feed_data is None:
