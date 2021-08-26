@@ -46,10 +46,10 @@ class RSSFeed():
         self.logger = logging.getLogger('mdapi.rss')
         self.api_url = api_url
 
-    def generate_feed(self, manga_id):
+    def generate_feed(self, manga_id, language_filter=["en"]):
         if isinstance(manga_id, int):
             self.manga_id = self.convert_legacy_id(manga_id)
-        chapters = self.get_recent_chapters(manga_id)
+        chapters = self.get_recent_chapters(manga_id, language_filter)
         manga = self.get_manga(manga_id)
         if manga is None or chapters is None:
             return None
@@ -102,13 +102,14 @@ class RSSFeed():
             manga_id = self.convert_legacy_id(manga_id)
         return self.make_request(request_uri='manga/{}'.format(manga_id))
 
-    def get_recent_chapters(self, manga_id):
+    def get_recent_chapters(self, manga_id, language_filter):
         """
         Grab chapters for the Manga
         """
         if isinstance(manga_id, int):
             manga_id = self.convert_legacy_id(manga_id)
-        return self.make_request(request_uri='chapter?manga={}&order[updatedAt]=asc'.format(manga_id))
+        locale_filter = "&".join(["locales[]={}".format(x) for x in language_filter])
+        return self.make_request(request_uri='manga/{}/feed?order[chapter]=desc&{}'.format(manga_id, locale_filter))
 
 
     @cache_id
