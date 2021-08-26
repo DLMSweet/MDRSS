@@ -1,13 +1,13 @@
+# pylint: disable=line-too-long
+# pylint: disable=missing-module-docstring
 from uuid import UUID
-import json
 from typing import Union
-import requests
-import quart.flask_patch
-from quart import Quart, flash, render_template, request, Response, make_push_promise, url_for
+import quart.flask_patch # pylint: disable=unused-import
+from quart import Quart, flash, render_template, request, Response, make_push_promise, url_for, redirect, abort
 from flask_pydantic import validate
 from flask_paginate import Pagination, get_page_parameter, get_page_args
 from flask_bootstrap import Bootstrap
-from lib.mdapi import MangadexAPI, APIError
+from lib.mdapi import MangadexAPI, APIError, MangaNotFound
 from lib.mdrss import RSSFeed
 
 app = Quart(__name__)
@@ -18,13 +18,21 @@ API_URL = "https://api.mangadex.org"
 MDAPI = MangadexAPI(API_URL)
 RSS = RSSFeed(API_URL)
 
-async def convert_legacy_id(lookup_id, lookup_type="manga"):
+@app.errorhandler(404)
+async def page_not_found(error):
     """
-    Converts a legacy ID to a new style UUID
+    Flash them. Let them look upon their error
     """
-    payload = json.dumps({ "type": lookup_type, "ids": [ lookup_id ] })
-    return await requests.post('{}/legacy/mapping'.format(API_URL), data=payload).json()[0]["data"]["attributes"]["newId"]
+    await flash("That page doesn't exist: {}".format(error), "warning")
+    return redirect(url_for('index'))
 
+@app.errorhandler(400)
+async def validation_error(error):
+    """
+    Flash them. Let them look upon their error
+    """
+    await flash("Something was wrong with your request: {}".format(error), "warning")
+    return redirect(url_for('index'))
 
 @app.route('/', methods=["GET"])
 async def index():
@@ -33,7 +41,7 @@ async def index():
     much front page
     """
     page = request.args.get(get_page_parameter(), type=int, default=1)
-    page, per_page, offset = get_page_args(page_parameter="p", per_page_parameter="pp", pp=10)
+    page, per_page, offset = get_page_args(page_parameter="p", per_page_parameter="pp", pp=10) # pylint: disable=unbalanced-tuple-unpacking
 
     if request.args.get("search"):
         if per_page:
@@ -63,11 +71,6 @@ async def index():
     await make_push_promise(url_for('static', filename='js/bootstrap.min.js'))
     return await render_template('index.html')
 
-@app.route('/stats/', methods=["GET"])
-@validate()
-async def print_stats():
-    return MDAPI.cache_stats()
-
 @app.route('/manga/<manga_id>', methods=["GET"])
 @validate()
 async def get_manga(manga_id: Union[UUID, int]):
@@ -75,12 +78,14 @@ async def get_manga(manga_id: Union[UUID, int]):
     Returns the page for a Manga, including a list
     of all the chapters
     """
-    if isinstance(manga_id, int):
-        manga_id = convert_legacy_id(manga_id)
-    manga = MDAPI.get_manga(manga_id)
+    try:
+        manga = MDAPI.get_manga(manga_id)
+    except MangaNotFound:
+        await flash("Could not find manga with ID of {}".format(manga_id), "warning")
+        return redirect(url_for('index'))
 
     page = request.args.get(get_page_parameter(), type=int, default=1)
-    page, per_page, offset = get_page_args(page_parameter="p", per_page_parameter="pp", pp=10)
+    page, per_page, offset = get_page_args(page_parameter="p", per_page_parameter="pp", pp=10) # pylint: disable=unbalanced-tuple-unpacking
     if per_page:
         chapters = manga.get_chapters(offset=offset)
     if chapters:
@@ -109,9 +114,10 @@ async def get_manga_rss(manga_id: Union[UUID, int]):
     """
     Currently unfinished, at some point will be a RSS feed generator
     """
-    if isinstance(manga_id, int):
-        manga_id = convert_legacy_id(manga_id)
-    return Response(RSS.generate_feed(manga_id), mimetype='text/xml')
+    feed_data = RSS.generate_feed(manga_id)
+    if feed_data is None:
+        abort(404)
+    return Response(feed_data, mimetype='text/xml')
 
 
 @app.route('/reader/<chapter_id>', methods=["GET"])
@@ -124,7 +130,7 @@ async def read_chapter(chapter_id: UUID):
     try:
         chapter = MDAPI.get_chapter(chapter_id)
     except APIError:
-        chapters = None
+        abort(404)
     await make_push_promise(url_for('static', filename='css/style.css'))
     await make_push_promise(url_for('static', filename='css/bootstrap.min.css'))
     await make_push_promise(url_for('static', filename='js/jquery-3.2.1.slim.min.js'))
@@ -142,7 +148,6 @@ async def get_image(chapter_id: UUID, image_id: str):
     Returns an image from the MD@H network
     Done this way to provide timing and response data to the MD@H network
     """
-    # TODO: Refactor this to not need to reload the chapter from the API
     chapter = MDAPI.get_chapter(chapter_id)
     image_resp = await chapter.get_image(image_id)
     try:
