@@ -9,7 +9,7 @@
   <ul>
   <!-- TODO: Why are they all indexed as English? -->
   {% for alt_title in manga.alt_titles %}
-    <li>{{ alt_title["en"] }}
+    <li>{{ alt_title["en"] | safe }}
   {% endfor %}
   </ul>
   <hr class="my-4">
