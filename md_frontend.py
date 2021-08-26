@@ -138,7 +138,7 @@ async def read_chapter(chapter_id: UUID):
         await make_push_promise(url_for("get_image", chapter_id=chapter.chapter_id, image_id=image))
     return await render_template('reader.html', chapter=chapter)
 
-@app.route('/reader/<chapter_id>/<image_id>', methods=["GET"])
+@app.route('/image/<chapter_id>/<image_id>', methods=["GET"])
 @validate()
 async def get_image(chapter_id: UUID, image_id: str):
     """
