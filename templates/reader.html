@@ -2,19 +2,20 @@
 
 {% block styles %}
 {{super()}}
-<link rel="stylesheet" href="{{ url_for('static', filename='reader.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/reader.css') }}">
 {% endblock %}
 
 {% block content %}
 
 <div class="jumbotron text-center">
+<div id="ImageSpinner" class="loader" style="display: block"></div>
 <div id="ChapterIndicators" class="carousel slide" data-ride="carousel" data-interval="false" data-wrap="false">
   <ol class="carousel-indicators">
     {% for image in chapter.image_list %}
 	<li data-target="#ChapterIndicators" data-slide-to="{{ loop.index }}" {% if loop.index == 1 %} class="active"  {% endif %}></li>
     {% endfor %}
   </ol>
-  <div class="carousel-inner">
+  <div id="MangaImages" class="carousel-inner" style="display: none">
     {% for image in chapter.image_list %}
     <div class="carousel-item {% if loop.index == 1 %} active {% endif %} text-center  h-75">
         <img class="img-fluid lozad" src='{{ url_for("get_image", chapter_id=chapter.chapter_id, image_id=image) }}' id="{{ image }}">
@@ -35,4 +36,15 @@
 
 {% block scripts %}
 {{super()}}
+<script>
+
+
+$(window).on("load", function() {
+    console.log("ALL IMAGES LOADED")
+	$("#ImageSpinner").hide();
+	$("#MangaImages").show();
+
+});
+
+</script>
 {% endblock %}
