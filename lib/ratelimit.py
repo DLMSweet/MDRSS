@@ -70,19 +70,19 @@ class RateLimitDecorator(object):
 
     @property
     def num_calls(self):
-        return self.__redis.get("rl_numcalls")
+        return int(self.__redis.get("rl_numcalls"))
 
     @num_calls.setter
     def num_calls(self, calls):
-        return self.__redis.set("rl_numcalls", calls)
+        self.__redis.set("rl_numcalls", calls)
 		
     @property
     def last_reset(self):
-        return self.__redis.get("rl_last_reset")
+        return float(self.__redis.get("rl_last_reset"))
 
     @last_reset.setter
     def last_reset(self, cur_clock):
-        return self.__redis.set("rl_last_reset", cur_clock)
+        self.__redis.set("rl_last_reset", cur_clock)
 
     def __call__(self, func):
         '''

@@ -11,6 +11,8 @@ from ratelimit import limits, sleep_and_retry
 import requests
 import bbcode
 from lib.rcache import DistributedCache as rcache
+from lib.ratelimit import RateLimitDecorator as ratelimit
+from lib.ratelimit import RateLimitException, sleep_and_retry
 
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 module_logger = logging.getLogger('mdapi')
@@ -126,11 +128,9 @@ class MangadexAPI():
             raise
         return chapter
 
-    # Check if it's in the cache, if not proceed. Grab the lock. Check again in case someone updated Cache, proceed.
-    @lock(lock_name="api_server")
     @rcache
     @sleep_and_retry
-    @limits(calls=5, period=1)
+    @ratelimit(calls=5, period=1)
     def make_request(self, request_uri, payload=None, type="GET"):
         """
         Class to handle making requests to the MD API, rate limited

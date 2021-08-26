@@ -57,6 +57,7 @@ class RSSFeed():
         return fg.rss_str(pretty=True)
 
     @rcache
+    @sleep_and_retry
     @ratelimit(calls=5, period=1)
     def make_request(self, request_uri, payload=None, type="GET"):
         """
