@@ -18,7 +18,7 @@
   <div id="MangaImages" class="carousel-inner" style="display: none">
     {% for image in chapter.image_list %}
     <div class="carousel-item {% if loop.index == 1 %} active {% endif %} text-center  h-75">
-        <img class="img-fluid lozad" src='{{ url_for("get_image", chapter_id=chapter.chapter_id, image_id=image) }}' id="{{ image }}">
+        <img class="img-fluid" src='{{ url_for("get_image", chapter_id=chapter.chapter_id, image_id=image) }}' id="{{ image }}">
     </div>
     {% endfor %}
   </div>
@@ -37,14 +37,10 @@
 {% block scripts %}
 {{super()}}
 <script>
-
-
 $(window).on("load", function() {
-    console.log("ALL IMAGES LOADED")
+    console.log("ALL IMAGES LOADED");
 	$("#ImageSpinner").hide();
 	$("#MangaImages").show();
-
 });
-
 </script>
 {% endblock %}
