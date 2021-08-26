@@ -15,7 +15,7 @@ from lib.rcache import DistributedCache as rcache
 from lib.ratelimit import RateLimitDecorator as ratelimit
 from lib.ratelimit import RateLimitException, sleep_and_retry
 
-logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
+logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.WARNING)
 module_logger = logging.getLogger('mdapi')
 REDIS = StrictRedis(host="localhost", decode_responses=True)
 
