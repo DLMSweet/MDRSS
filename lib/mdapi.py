@@ -3,6 +3,7 @@ import json
 import base64
 from memoization import cached
 import requests
+import bbcode
 
 class MangadexAPI():
     """
@@ -190,7 +191,7 @@ class Manga():
 
         self.data = requests.get('{}/manga/{}'.format(self.api_url, self.manga_id)).json()["data"]
         self.title = self.data["attributes"]["title"]["en"]
-        self.description = self.data["attributes"]["description"]["en"]
+        self.description = bbcode.render_html(self.data["attributes"]["description"]["en"]).replace("&amp;", "&")
         self.alt_titles = self.data["attributes"]["altTitles"]
 
     def convert_legacy_id(self, manga_id):
