@@ -190,6 +190,8 @@ class Manga():
 
         self.data = requests.get('{}/manga/{}'.format(self.api_url, self.manga_id)).json()["data"]
         self.title = self.data["attributes"]["title"]["en"]
+        self.description = self.data["attributes"]["description"]["en"]
+        self.alt_titles = self.data["attributes"]["altTitles"]
 
     def convert_legacy_id(self, manga_id):
         """
@@ -198,16 +200,14 @@ class Manga():
         payload = json.dumps({ "type": "manga", "ids": [ manga_id ] })
         return requests.post('{}/legacy/mapping'.format(self.api_url), data=payload).json()[0]["data"]["attributes"]["newId"]
 
-    def get_chapters(self, limit=10, offset=0):
+    def get_chapters(self, limit=10, offset=0, language="en"):
         """
         Returns a list of chapters for this Manga
         """
-        response = requests.get('{}/chapter?manga={}&limit={}&offset={}'.format(self.api_url, self.manga_id, limit, offset)).json()
-        return [ Chapter(self.manga_id, x, self.api_url) for x in response["results"] ]
-
-    def get_total_chapters(self):
-        """
-        Kind of a dirty hack, but just gets the total number of chapters for use in Pagination
-        """
-        response = requests.get('{}/chapter?manga={}'.format(self.api_url, self.manga_id)).json()
-        return response["total"]
+        # TODO: Come back to this later. Search said 54 results, only 26 actually returned with offsets.
+        #response = requests.get('{}/chapter?manga={}&limit={}&offset={}&translatedLanguage={}'.format(self.api_url, self.manga_id, limit, offset, language))
+        response = requests.get('{}/chapter?manga={}&limit={}&offset={}'.format(self.api_url, self.manga_id, limit, offset))
+        if response.status_code == 204:
+            return []
+        self.total_chapters = response.json()["total"]
+        return [ Chapter(self.manga_id, x, self.api_url) for x in response.json()["results"] ]
