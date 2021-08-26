@@ -96,8 +96,10 @@ class MangadexAPI(dict):
             raise
         return chapter
 
+    # Check if it's in the cache, if not proceed. Grab the lock. Check again in case someone updated Cache, proceed.
     @cache
     @lock(lock_name="api_server")
+    @cache
     @sleep_and_retry
     @limits(calls=5, period=1)    
     def make_request(self, request_uri=None):
