@@ -65,9 +65,9 @@ class RSSFeed():
             fe.published(chapter["data"]["attributes"]["publishAt"])
             fe.updated(chapter["data"]["attributes"]["updatedAt"])
             fe.link(href="https://magmadex.org/reader/{}".format(chapter["data"]["id"]))
-            title_desc = "Volume: {} Chapter: {}".format(chapter["data"]["attributes"]["volume"], chapter["data"]["attributes"]["chapter"])
+            title_desc = "{} - Chapter {}".format(manga["data"]["attributes"]["title"]["en"], chapter["data"]["attributes"]["chapter"])
             if chapter["data"]["attributes"]["title"]:
-                title_desc = title_desc + " - {}".format(chapter["data"]["attributes"]["title"])
+                title_desc = title_desc + " | {}".format(chapter["data"]["attributes"]["title"])
             fe.title(title_desc)
             fe.description(title_desc)
         return fg.rss_str(pretty=True)
