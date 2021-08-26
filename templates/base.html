@@ -11,22 +11,21 @@
 {% endblock %}
 
 {% block navbar %}
-{%- set navigation_bar = [
-    (url_for('index'),              'index',      'Index',         'fa-home'),
-] -%}
-{% set active_page = active_page|default('index') -%}
-<nav class="flex-row navbar navbar-fixed-top navbar-expand-sm">
-  <div class="container-fluid">
-    <div class="row">
-      <div class="col-2 col-lg-2">
-        <ul class="nav flex-column nav-div nav-sidebar" id="sidebar-navigation">
-            {%- for href, id, caption, icon in navigation_bar -%}
-              <li {% if id == active_page %}class="active"; border-radius:7px;"{% endif %} >
-		      <a class="linktext" href="{{ href }}"><i style="padding-right:5px" class="fas {{ icon }}"></i>{{ caption|e }}</a>
-	      </li>
-            {%- endfor -%}
-        </ul>
-    </div>
+<nav class="navbar navbar-expand-lg navbar-light bg-light">
+  <a class="navbar-brand" href="#">TMDFE</a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+
+  <div class="collapse navbar-collapse" id="navbarSupportedContent">
+    <ul class="navbar-nav mr-auto">
+      <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('index') }}">Home</a>
+      </li>
+	  {% block navitems %}
+	  {% endblock %}
+    </ul>
+  </div>
 </nav>
 {% endblock %}
 

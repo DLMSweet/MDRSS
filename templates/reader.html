@@ -5,8 +5,12 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/reader.css') }}">
 {% endblock %}
 
+{% block navitems %}
+<li class="nav-item">
+    <a class="nav-link" href="{{url_for('get_manga', manga_id=chapter.manga) }}">Back to Manga</a>
+</li>
+{% endblock %}
 {% block content %}
-
 <div class="jumbotron text-center">
 <div id="ImageSpinner" class="loader" style="display: block"></div>
 <div id="ChapterIndicators" class="carousel slide" data-ride="carousel" data-interval="false" data-wrap="false">
