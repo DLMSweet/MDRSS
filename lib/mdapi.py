@@ -147,11 +147,13 @@ class MangadexAPI():
         Sends a report about download speed/success/etc to the backend
         """
         report = json.dumps({ "url": image_url, "success": success, "bytes": downloaded_bytes, "duration": duration, "cached": is_cached })
+        self.logger.debug("Sending report: {}".format(report))
         resp = requests.post("https://api.mangadex.network/report", data=report)
         if not resp.ok:
             self.logger.info("Failed to report status of image: {} - {}".format(resp.status_code, resp.reason))
             self.logger.debug(resp.json())
             self.logger.debug(report)
+        self.logger.debug("Report finished")
 
 class Chapter():
     """
@@ -250,7 +252,7 @@ class Chapter():
             # Give the system time to breathe after we apparently pissed it off.
             time.sleep(1)
             return await self.get_image(image, report=report, tries=tries+1)
-        self.logger.debug("Response from image server: ".format(data.status_code))
+        self.logger.debug("Response from image server: {}".format(data.status_code))
         if data.status_code == 200:
             if report:
                 is_cached = bool(data.headers['X-Cache'] == "HIT")
