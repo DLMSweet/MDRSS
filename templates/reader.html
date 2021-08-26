@@ -10,14 +10,14 @@
 <div class="jumbotron text-center">
 <div id="ChapterIndicators" class="carousel slide" data-ride="carousel" data-interval="false" data-wrap="false">
   <ol class="carousel-indicators">
-    {% for image in images %}
+    {% for image in chapter.image_list %}
 	<li data-target="#ChapterIndicators" data-slide-to="{{ loop.index }}" {% if loop.index == 1 %} class="active"  {% endif %}></li>
     {% endfor %}
   </ol>
   <div class="carousel-inner">
-    {% for image in images %}
+    {% for image in chapter.image_list %}
     <div class="carousel-item {% if loop.index == 1 %} active {% endif %} text-center  h-75">
-        <img class="img-fluid" src="{{ image }}">
+        <img class="img-fluid lozad" data-src="{{ chapter.get_image_bytes(image) }}" id="{{ image }}">
     </div>
     {% endfor %}
   </div>
@@ -35,4 +35,9 @@
 
 {% block scripts %}
 {{super()}}
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lozad/dist/lozad.min.js"></script>
+<script>
+const observer = lozad(); // lazy loads elements with default selector as '.lozad'
+observer.observe();
+</script>
 {% endblock %}
