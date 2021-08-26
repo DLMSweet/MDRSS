@@ -19,7 +19,7 @@ Bootstrap(app)
 
 API_URL = "https://api.mangadex.org"
 MDAPI = MangadexAPI(API_URL)
-RSS = RSSFeed(API_URL)
+RSS = MDRSSFeed(API_URL)
 
 @app.errorhandler(404)
 async def page_not_found(error):
