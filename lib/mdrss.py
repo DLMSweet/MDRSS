@@ -38,7 +38,7 @@ class RSSFeed():
         feed.id(manga["data"]["attributes"]["title"]["en"])
         feed.title(manga["data"]["attributes"]["title"]["en"])
         feed.link(href="https://mangadex.org/title/{}".format(manga_id))
-        feed.link(href="https://magmadex.org/rss/manga/{}".format(manga_id), rel="self")
+        feed.link(href="https://mangadex.org/title/{}".format(manga_id), rel="self")
         if manga["data"]["attributes"]["description"]["en"]:
             feed.description(manga["data"]["attributes"]["description"]["en"])
         else:
