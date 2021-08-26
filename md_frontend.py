@@ -47,8 +47,18 @@ async def index():
                 page_parameter="p",
                 per_page_parameter="pp",
             )
+            await make_push_promise(url_for('static', filename='css/style.css'))
+            await make_push_promise(url_for('static', filename='css/bootstrap.min.css'))
+            await make_push_promise(url_for('static', filename='js/jquery-3.2.1.slim.min.js'))
+            await make_push_promise(url_for('static', filename='js/popper.min.js'))
+            await make_push_promise(url_for('static', filename='js/bootstrap.min.js'))
             return await render_template('index.html', results=results, pagination=pagination)
         await flash("No results found", "warning")
+    await make_push_promise(url_for('static', filename='css/style.css'))
+    await make_push_promise(url_for('static', filename='css/bootstrap.min.css'))
+    await make_push_promise(url_for('static', filename='js/jquery-3.2.1.slim.min.js'))
+    await make_push_promise(url_for('static', filename='js/popper.min.js'))
+    await make_push_promise(url_for('static', filename='js/bootstrap.min.js'))
     return await render_template('index.html')
 
 @app.route('/stats/', methods=["GET"])
@@ -110,7 +120,14 @@ async def read_chapter(chapter_id: UUID):
     loading images directly from the MD@H network
     """
     chapter = MDAPI.get_chapter(chapter_id)
+    await make_push_promise(url_for('static', filename='css/style.css'))
+    await make_push_promise(url_for('static', filename='css/bootstrap.min.css'))
+    await make_push_promise(url_for('static', filename='js/jquery-3.2.1.slim.min.js'))
+    await make_push_promise(url_for('static', filename='js/popper.min.js'))
+    await make_push_promise(url_for('static', filename='js/bootstrap.min.js'))
     await make_push_promise(url_for('static', filename='reader.css'))
+    for image in chapter.image_list:
+        await make_push_promise(url_for("get_image", chapter_id=chapter.chapter_id, image_id=image))
     return await render_template('reader.html', chapter=chapter)
 
 @app.route('/reader/<chapter_id>/<image_id>', methods=["GET"])
@@ -122,7 +139,11 @@ async def get_image(chapter_id: UUID, image_id: str):
     """
     chapter = MDAPI.get_chapter(chapter_id)
     image_resp = await chapter.get_image(image_id)
-    response = Response(image_resp.content)
+    try:
+        response = Response(image_resp.content)
+    except AttributeError:
+        # Failed to get an image
+        return Response("Failed  to get image", 500)
     response.headers['Content-Type'] = image_resp.headers['Content-Type']
     return response
 
