@@ -3,9 +3,17 @@
 {% block content %}
 
 <div class="jumbotron">
-  <h1 class="display-4">{{ manga.data["attributes"]["title"]["en"] }}</h1>
+  <h1 class="display-4">{{ manga.title }}</h1>
   <hr class="my-4">
-  <p>{{ manga.data["attributes"]["description"]["en"] | safe }}</p>
+  <h3>Alternate Titles</h3>
+  <ul>
+  <!-- TODO: Why are they all indexed as English? -->
+  {% for alt_title in manga.alt_titles %}
+    <li>{{ alt_title["en"] }}
+  {% endfor %}
+  </ul>
+  <hr class="my-4">
+  <p>{{ manga.description | safe }}</p>
 </div>
 <div>
 {{ pagination.info }}
