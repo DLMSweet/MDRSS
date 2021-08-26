@@ -7,7 +7,7 @@ from quart import Quart, flash, render_template, request, Response, make_push_pr
 from flask_pydantic import validate
 from flask_paginate import Pagination, get_page_parameter, get_page_args
 from flask_bootstrap import Bootstrap
-from lib.mdapi import MangadexAPI
+from lib.mdapi import MangadexAPI, APIError
 
 app = Quart(__name__)
 app.secret_key = 'much secret very secure'
@@ -110,7 +110,10 @@ async def get_manga_rss(manga_id: Union[UUID, int]):
     if isinstance(manga_id, int):
         manga_id = convert_legacy_id(manga_id)
     manga = MDAPI.get_manga(manga_id)
-    chapters = manga.get_chapters()
+    try:
+        chapters = manga.get_chapters()
+    except APIError:
+        chapters = None
     return await render_template('feed.rss', manga=manga, chapters=chapters)
 
 
@@ -121,7 +124,10 @@ async def read_chapter(chapter_id: UUID):
     Returns the reader page for a chapter,
     loading images directly from the MD@H network
     """
-    chapter = MDAPI.get_chapter(chapter_id)
+    try:
+        chapter = MDAPI.get_chapter(chapter_id)
+    except APIError:
+        chapters = None
     await make_push_promise(url_for('static', filename='css/style.css'))
     await make_push_promise(url_for('static', filename='css/bootstrap.min.css'))
     await make_push_promise(url_for('static', filename='js/jquery-3.2.1.slim.min.js'))
@@ -139,6 +145,7 @@ async def get_image(chapter_id: UUID, image_id: str):
     Returns an image from the MD@H network
     Done this way to provide timing and response data to the MD@H network
     """
+    # TODO: Refactor this to not need to reload the chapter from the API
     chapter = MDAPI.get_chapter(chapter_id)
     image_resp = await chapter.get_image(image_id)
     try:
