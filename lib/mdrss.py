@@ -68,6 +68,8 @@ class RSSFeed():
                     response = requests.post('{}/{}'.format(self.api_url, request_uri), data=payload)
                 else:
                     response = requests.get('{}/{}'.format(self.api_url, request_uri))
+                if response.status_code == 204:
+                    return None
                 if response.ok:
                     try:
                         return response.json()
@@ -76,7 +78,6 @@ class RSSFeed():
                 elif response.status_code == 429:
                     # Rate limited.
                     self.logger.error("Being ratelimited by the API, waiting for a second...")
-                    time.sleep(1)
                 else:
                     # Response wasn't okay
                     self.logger.warn("Something went wrong: {}".format(response.status_code))
@@ -84,6 +85,7 @@ class RSSFeed():
             except requests.exceptions.ConnectionError:
                 self.logger.warn("Failed to connect to {}".format(self.api_url))
                 return None
+            time.sleep(1)
         return None
 
     def get_manga(self, manga_id):

@@ -141,6 +141,8 @@ class MangadexAPI():
                 response = requests.post('{}/{}'.format(self.api_url, request_uri), data=payload)
             else:
                 response = requests.get('{}/{}'.format(self.api_url, request_uri))
+            if response.status_code == 204:
+                return None
             if response.ok:
                 try:
                     return response.json()
