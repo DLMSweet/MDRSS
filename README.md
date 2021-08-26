@@ -11,3 +11,5 @@ The use of WEBSCALE O(n^n^n) functions makes this able to support at least one c
 By utilizing ADVANCED, AI ALGORITHMS in the form of HYPERSCALE redis caching, we can even support a second user sometimes.
 
 Truely, this is the best interface for Mangadex there is.
+
+If you just want easy RSS feeds, this is running at: https://magmadex.org/
