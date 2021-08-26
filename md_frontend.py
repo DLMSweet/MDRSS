@@ -7,7 +7,7 @@ from quart import Quart, flash, render_template, request, Response, make_push_pr
 from flask_pydantic import validate
 from flask_paginate import Pagination, get_page_parameter, get_page_args
 from flask_bootstrap import Bootstrap
-from lib.mdapi import MangadexAPI, APIError, MangaNotFound, ChapterNotFound
+from lib.mdapi import MangadexAPI, MangaNotFound, ChapterNotFound
 from lib.mdrss import RSSFeed
 
 app = Quart(__name__)

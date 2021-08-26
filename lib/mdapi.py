@@ -15,7 +15,7 @@ from lib.rcache import DistributedCache as rcache
 from lib.ratelimit import RateLimitDecorator as ratelimit
 from lib.ratelimit import RateLimitException, sleep_and_retry
 
-logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.WARNING)
+logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 module_logger = logging.getLogger('mdapi')
 REDIS = StrictRedis(host="localhost", decode_responses=True)
 
@@ -38,23 +38,6 @@ class ChapterNotFound(Exception):
     """
     Chapter's not here man
     """
-
-def lock(lock_name="global_lock"):
-    """
-    Provides a locking mechanism to make sure workers aren't all trying to request
-    the same thing from the API all at once, when one could perform the lookup, cache it, 
-    and everyone else can pull from there.
-    """
-    def wrapper(func):
-        def inner_wrapper(*args, **kwargs):
-            try:
-                with REDIS.lock(lock_name, blocking_timeout=5) as rlock: # pylint: disable=unused-variable
-                    results = func(*args, **kwargs)
-            except:
-                results = None
-            return results
-        return inner_wrapper
-    return wrapper
 
 class MangadexAPI():
     """
@@ -129,7 +112,7 @@ class MangadexAPI():
             raise
         return chapter
 
-    @rcache
+#    @rcache
     @sleep_and_retry
     @ratelimit(calls=5, period=1)
     def make_request(self, request_uri, payload=None, type="GET"):
@@ -152,7 +135,7 @@ class MangadexAPI():
             elif response.status_code == 429:
                 # Rate limited. Sleep for a second before continuing. TODO: Remove or refactor
                 self.logger.error("Being ratelimited by the API, please slow down")
-                raise APIRateLimit(response.status_code)
+                raise RateLimitException(response.status_code, 1)
             else:
                 # Response wasn't okay
                 self.logger.error('{}/{}'.format(self.api_url, request_uri))
@@ -215,7 +198,6 @@ class Chapter():
         self.data = response
         self.load_data()
 
-    @lock(lock_name="image_server")
     def get_image_server(self):
         """
         Attempt to get a MD@H node to pull images from
@@ -224,7 +206,7 @@ class Chapter():
             return json.loads(REDIS.get('at-home/server/{}'.format(self.chapter_id)))["baseUrl"]
         try:
             response = self.api.make_request('at-home/server/{}'.format(self.chapter_id))
-        except APIRateLimit:
+        except RateLimitException:
             time.sleep(1)
             return self.get_image_server()
         return response["baseUrl"]

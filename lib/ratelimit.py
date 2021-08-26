@@ -13,6 +13,7 @@ from math import floor
 import time
 import sys
 import threading
+import logging
 from redis import StrictRedis
 
 def now():
@@ -55,6 +56,7 @@ class RateLimitDecorator(object):
         :param function clock: An optional function retuning the current time.
         :param bool raise_on_limit: A boolean allowing the caller to avoiding rasing an exception.
         '''
+        self.logger = logging.getLogger('mdapi.ratelimit')
         self.__redis = StrictRedis(host="localhost", decode_responses=True)
         self.clamped_calls = calls
         self.period = period
@@ -106,8 +108,9 @@ class RateLimitDecorator(object):
             :param kargs: keyworded variable length argument list to the decorated function.
             :raises: RateLimitException
             '''
-            with self.lock:
+            with self.__redis.lock("ratelimit"):
                 period_remaining = self.__period_remaining()
+                self.logger.debug("period_remaining is {}".format(period_remaining))
 
                 # If the time window has elapsed then reset.
                 if period_remaining <= 0:
@@ -116,6 +119,7 @@ class RateLimitDecorator(object):
 
                 # Increase the number of attempts to call the function.
                 self.num_calls += 1
+                self.logger.debug("Incremented num_calls to {}".format(self.num_calls))
 
                 # If the number of attempts to call the function exceeds the
                 # maximum then raise an exception.
@@ -146,6 +150,7 @@ def sleep_and_retry(func):
     :return: Decorated function.
     :rtype: function
     '''
+    logger = logging.getLogger('mdapi.ratelimit.sleepretry')
     @wraps(func)
     def wrapper(*args, **kargs):
         '''
@@ -159,5 +164,6 @@ def sleep_and_retry(func):
             try:
                 return func(*args, **kargs)
             except RateLimitException as exception:
+                logger.debug("Function is being ratelimited, sleeping for {}".format(exception.period_remaining))
                 time.sleep(exception.period_remaining)
     return wrapper
