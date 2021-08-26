@@ -13,6 +13,7 @@ from math import floor
 import time
 import sys
 import threading
+import logging
 from redis import StrictRedis
 
 def now():
@@ -75,7 +76,7 @@ class RateLimitDecorator(object):
     @num_calls.setter
     def num_calls(self, calls):
         self.__redis.set("rl_numcalls", calls)
-		
+        
     @property
     def last_reset(self):
         return float(self.__redis.get("rl_last_reset"))
@@ -121,6 +122,7 @@ class RateLimitDecorator(object):
                 # maximum then raise an exception.
                 if self.num_calls > self.clamped_calls:
                     if self.raise_on_limit:
+                        self.logger.warn('Being called too fast, raising exception')
                         raise RateLimitException('too many calls', period_remaining)
                     return
 
