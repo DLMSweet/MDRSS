@@ -29,8 +29,8 @@ def cache_id(func):
             return UUID(REDIS.get(str(args[1])))
         response = func(*args, **kwargs)
         if response:
-            REDIS.setex(str(args[1]), 3600, str(response))
-            module_logger.warn("Put {} into cache with 60m TTL".format(str(args[1])))
+            REDIS.setex(str(args[1]), 24*3600*7, str(response))
+            module_logger.warn("Put {} into cache with 1w TTL".format(str(args[1])))
         return response
     return wrapper
 
