@@ -48,7 +48,7 @@ async def index():
                 per_page_parameter="pp",
             )
             return await render_template('index.html', results=results, pagination=pagination)
-        flash("No results found", "warning")
+        await flash("No results found", "warning")
     return await render_template('index.html')
 
 @app.route('/manga/<manga_id>', methods=["GET"])
