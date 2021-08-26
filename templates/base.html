@@ -4,6 +4,12 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 {% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/jquery-3.2.1.slim.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/popper.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script>
+{% endblock %}
+
 {% block navbar %}
 {%- set navigation_bar = [
     (url_for('index'),              'index',      'Index',         'fa-home'),
@@ -44,8 +50,3 @@
 <div class="body">
   {% block content %}{% endblock %}
 </div>
-{% block scripts %}
-<script src="{{ url_for('static', filename='js/jquery-3.2.1.slim.min.js') }}"></script>
-<script src="{{ url_for('static', filename='js/popper.min.js') }}"></script>
-<script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script>
-{% endblock %}
