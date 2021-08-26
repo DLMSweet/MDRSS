@@ -85,13 +85,15 @@ async def get_manga(manga_id: Union[UUID, int]):
         pagination = get_pagination(
             p=page,
             pp=per_page,
-            total=manga.get_total_chapters(),
+            total=manga.total_chapters,
             record_name="chapters",
             format_total=True,
             format_number=True,
             page_parameter="p",
             per_page_parameter="pp",
         )
+    else:
+        pagination = None
     await make_push_promise(url_for('static', filename='css/style.css'))
     await make_push_promise(url_for('static', filename='css/bootstrap.min.css'))
     await make_push_promise(url_for('static', filename='js/jquery-3.2.1.slim.min.js'))
@@ -125,7 +127,7 @@ async def read_chapter(chapter_id: UUID):
     await make_push_promise(url_for('static', filename='js/jquery-3.2.1.slim.min.js'))
     await make_push_promise(url_for('static', filename='js/popper.min.js'))
     await make_push_promise(url_for('static', filename='js/bootstrap.min.js'))
-    await make_push_promise(url_for('static', filename='reader.css'))
+    await make_push_promise(url_for('static', filename='css/reader.css'))
     for image in chapter.image_list:
         await make_push_promise(url_for("get_image", chapter_id=chapter.chapter_id, image_id=image))
     return await render_template('reader.html', chapter=chapter)
