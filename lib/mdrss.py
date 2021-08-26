@@ -2,37 +2,15 @@
 import logging
 import json
 from uuid import UUID
-from redis import StrictRedis
 import requests
 from feedgen.feed import FeedGenerator
-from pprint import pprint
+from lib.rcache import DistributedCache as rcache
+from lib.ratelimit import RateLimitDecorator as ratelimit
+from lib.ratelimit import RateLimitException, sleep_and_retry
+
+
 
 module_logger = logging.getLogger('mdapi')
-REDIS = StrictRedis(host="localhost", decode_responses=True)
-
-def cache(func):
-    def wrapper(*args, **kwargs):
-        if REDIS.exists(str(kwargs['request_uri'])):
-            module_logger.debug("Got {} from cache".format(kwargs['request_uri']))
-            return json.loads(REDIS.get(str(kwargs['request_uri'])))
-        response = func(*args, **kwargs)
-        if response:
-            REDIS.setex(str(kwargs['request_uri']), 300, json.dumps(response))
-            module_logger.debug("Put {} into cache with 5m TTL".format(kwargs['request_uri']))
-        return response
-    return wrapper
-
-def cache_id(func):
-    def wrapper(*args, **kwargs):
-        if REDIS.exists(str(args[1])):
-            module_logger.warn("Got {} from cache".format(str(args[1])))
-            return UUID(REDIS.get(str(args[1])))
-        response = func(*args, **kwargs)
-        if response:
-            REDIS.setex(str(args[1]), 24*3600*7, str(response))
-            module_logger.warn("Put {} into cache with 1w TTL".format(str(args[1])))
-        return response
-    return wrapper
 
 class RSSFeed():
     """
@@ -78,53 +56,65 @@ class RSSFeed():
             return fg.atom_str(pretty=True)
         return fg.rss_str(pretty=True)
 
-    @cache
-    def make_request(self, request_uri=None):
+    @rcache
+    @ratelimit(calls=5, period=1)
+    def make_request(self, request_uri, payload=None, type="GET"):
         """
         Class to handle making requests to the MD API, rate limited
         """
-        try:
-            response = requests.get('{}/{}'.format(self.api_url, request_uri))
-            if response.ok:
-                try:
-                    return response.json()
-                except json.decoder.JSONDecodeError:
-                    self.logger.warn("Failed to get valid response for {}".format(request_uri))
-            elif response.status_code == 429:
-                # Rate limited.
-                self.logger.error("Being ratelimited by the API, please slow down")
-            else:
-                # Response wasn't okay
-                self.logger.warn("Something went wrong: {}".format(response.status_code))
-        except requests.exceptions.ConnectionError:
-            self.logger.warn("Failed to connect to {}".format(self.api_url))
+        while True:
+            try:
+                if type == "POST":
+                    response = requests.post('{}/{}'.format(self.api_url, request_uri), data=payload)
+                else:
+                    response = requests.get('{}/{}'.format(self.api_url, request_uri))
+                if response.ok:
+                    try:
+                        return response.json()
+                    except json.decoder.JSONDecodeError:
+                        self.logger.warn("Failed to get valid response for {}".format(request_uri))
+                elif response.status_code == 429:
+                    # Rate limited.
+                    self.logger.error("Being ratelimited by the API, waiting for a second...")
+                    time.sleep(1)
+                else:
+                    # Response wasn't okay
+                    self.logger.warn("Something went wrong: {}".format(response.status_code))
+                    return None
+            except requests.exceptions.ConnectionError:
+                self.logger.warn("Failed to connect to {}".format(self.api_url))
+                return None
         return None
 
     def get_manga(self, manga_id):
         """
         Let's get a Manga
         """
-        return self.make_request(request_uri='manga/{}'.format(manga_id))
+        return self.make_request('manga/{}'.format(manga_id))
 
     def get_recent_chapters(self, manga_id, language_filter):
         """
         Grab chapters for the Manga
         """
         locale_filter = "&".join(["locales[]={}".format(x) for x in language_filter])
-        return self.make_request(request_uri='manga/{}/feed?order[chapter]=desc&{}'.format(manga_id, locale_filter))
+        return self.make_request('manga/{}/feed?order[chapter]=desc&{}'.format(manga_id, locale_filter))
 
 
-    @cache_id
     def convert_legacy_id(self, manga_id):
         """
         If we were given a legacy ID, figure out what the new UUID is
         """
         payload = json.dumps({ "type": "manga", "ids": [ manga_id ] })
+        response = self.make_request('legacy/mapping', payload=payload, type="POST")
         try:
-            response = requests.post('{}/legacy/mapping'.format(self.api_url), data=payload)
-            new_uuid = response.json()[0]["data"]["attributes"]["newId"]
+            new_uuid = response[0]["data"]["attributes"]["newId"]
             self.logger.debug("Converted legacy ID {} to new UUID {}".format(manga_id, new_uuid))
             return UUID(new_uuid)
         except json.decoder.JSONDecodeError:
             self.logger.warning("Failed to get new UUID for {} - {}".format(manga_id, response))
-            return None
+        except AttributeError:
+            self.logger.warning("Failed to get new UUID for {} - {}".format(manga_id, response))
+        return None
+
+    def __str__(self):
+        return "<RSSFeed>"

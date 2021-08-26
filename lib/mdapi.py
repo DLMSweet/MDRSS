@@ -1,7 +1,7 @@
 # pylint: disable=line-too-long
 # pylint: disable=logging-format-interpolation
-import logging
 # pylint: disable=missing-module-docstring
+import logging
 import time
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -10,7 +10,9 @@ from redis import StrictRedis
 from ratelimit import limits, sleep_and_retry
 import requests
 import bbcode
+from lib.rcache import DistributedCache as rcache
 
+logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 module_logger = logging.getLogger('mdapi')
 REDIS = StrictRedis(host="localhost", decode_responses=True)
 
@@ -33,22 +35,6 @@ class ChapterNotFound(Exception):
     """
     Chapter's not here man
     """
-
-def cache(func):
-    """
-    Handles caching results from the API into Redis to reduce hits on the API
-    Also provides communication between workers
-    """
-    def wrapper(*args, **kwargs):
-        if REDIS.exists(str(kwargs['request_uri'])):
-            module_logger.debug("Got {} from cache".format(kwargs['request_uri']))
-            return json.loads(REDIS.get(str(kwargs['request_uri'])))
-        response = func(*args, **kwargs)
-        if response:
-            REDIS.setex(str(kwargs['request_uri']), 300, json.dumps(response))
-            module_logger.debug("Put {} into cache with 5m TTL".format(kwargs['request_uri']))
-        return response
-    return wrapper
 
 def lock(lock_name="global_lock"):
     """
@@ -83,14 +69,15 @@ class MangadexAPI():
         If we were given a legacy ID, figure out what the new UUID is
         """
         payload = json.dumps({ "type": "manga", "ids": [ manga_id ] })
+        response = self.make_request('legacy/mapping', payload=payload, type="POST")
         try:
-            response = requests.post('{}/legacy/mapping'.format(self.api_url), data=payload).json()
             new_uuid = response[0]["data"]["attributes"]["newId"]
             self.logger.debug("Converted legacy ID {} to new UUID {}".format(manga_id, new_uuid))
-            return new_uuid
-        except IndexError:
-            self.logger.warning("Failed  to get new UUID for {} - {}".format(manga_id, response))
-            raise MangaNotFound
+            return UUID(new_uuid)
+        except json.decoder.JSONDecodeError:
+            self.logger.warning("Failed to get new UUID for {} - {}".format(manga_id, response))
+        except AttributeError:
+            self.logger.warning("Failed to get new UUID for {} - {}".format(manga_id, response))
         return None
 
     def get_manga(self, manga_id):
@@ -108,7 +95,7 @@ class MangadexAPI():
         """
         Returns search results or None if nothing is found
         """
-        results = self.make_request(request_uri='manga?title={}&offset={}'.format(title, offset))
+        results = self.make_request('manga?title={}&offset={}'.format(title, offset))
         return_results = []
         try:
             if results["results"]:
@@ -140,18 +127,20 @@ class MangadexAPI():
         return chapter
 
     # Check if it's in the cache, if not proceed. Grab the lock. Check again in case someone updated Cache, proceed.
-    @cache
     @lock(lock_name="api_server")
-    @cache
+    @rcache
     @sleep_and_retry
     @limits(calls=5, period=1)
-    def make_request(self, request_uri=None):
+    def make_request(self, request_uri, payload=None, type="GET"):
         """
         Class to handle making requests to the MD API, rate limited
         """
         try:
             self.logger.warning("UNCACHED: Calling API with: {}".format(request_uri))
-            response = requests.get('{}/{}'.format(self.api_url, request_uri))
+            if type == "POST":
+                response = requests.post('{}/{}'.format(self.api_url, request_uri), data=payload)
+            else:
+                response = requests.get('{}/{}'.format(self.api_url, request_uri))
             if response.ok:
                 try:
                     return response.json()
@@ -217,7 +206,7 @@ class Chapter():
         """
         Get the chapter information from the API based on the UUID
         """
-        response = self.api.make_request(request_uri='chapter/{}'.format(chapter_id))
+        response = self.api.make_request('chapter/{}'.format(chapter_id))
         if response is None:
             raise ChapterNotFound
         self.data = response
@@ -231,7 +220,7 @@ class Chapter():
         if REDIS.exists('at-home/server/{}'.format(self.chapter_id)):
             return json.loads(REDIS.get('at-home/server/{}'.format(self.chapter_id)))["baseUrl"]
         try:
-            response = self.api.make_request(request_uri='at-home/server/{}'.format(self.chapter_id))
+            response = self.api.make_request('at-home/server/{}'.format(self.chapter_id))
         except APIRateLimit:
             time.sleep(1)
             return self.get_image_server()
@@ -323,7 +312,7 @@ class Manga():
         """
         Loads the data for a Manga UUID from the API
         """
-        self.data = self.api.make_request(request_uri='manga/{}'.format(self.manga_id))
+        self.data = self.api.make_request('manga/{}'.format(self.manga_id))
         if self.data is None:
             raise MangaNotFound
         self.title = self.data["data"]["attributes"]["title"]["en"]
@@ -338,6 +327,6 @@ class Manga():
         """
         # TODO: Come back to this later. Search said 54 results, only 26 actually returned with offsets.
         #response = requests.get('{}/chapter?manga={}&limit={}&offset={}&translatedLanguage={}'.format(self.api, self.manga_id, limit, offset, language))
-        response = self.api.make_request(request_uri='chapter?manga={}&limit={}&offset={}'.format(self.manga_id, limit, offset))
+        response = self.api.make_request('chapter?manga={}&limit={}&offset={}'.format(self.manga_id, limit, offset))
         self.total_chapters = response["total"]
         return [ Chapter(self.manga_id, x, self.api) for x in response["results"] ]
