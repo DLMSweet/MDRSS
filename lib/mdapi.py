@@ -250,6 +250,7 @@ class Chapter():
             # Give the system time to breathe after we apparently pissed it off.
             time.sleep(1)
             return await self.get_image(image, report=report, tries=tries+1)
+        self.logger.debug("Response from image server: ".format(data.status_code))
         if data.status_code == 200:
             if report:
                 is_cached = bool(data.headers['X-Cache'] == "HIT")
@@ -258,6 +259,7 @@ class Chapter():
                                  downloaded_bytes=len(data.content),
                                  duration=int(data.elapsed.total_seconds()*1000),
                                  is_cached=is_cached)
+            self.logger.debug("Returning image data")
             return data
         # By default, send a failing report. This doesn't get hit if we had a success above.
         if report:
