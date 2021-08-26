@@ -37,7 +37,7 @@ class RSSFeed():
         feed = FeedGenerator()
         feed.id(manga["data"]["attributes"]["title"]["en"])
         feed.title(manga["data"]["attributes"]["title"]["en"])
-        feed.link(href="https://magmadex.org/manga/{}".format(manga_id))
+        feed.link(href="https://mangadex.org/title/{}".format(manga_id))
         feed.link(href="https://magmadex.org/rss/manga/{}".format(manga_id), rel="self")
         if manga["data"]["attributes"]["description"]["en"]:
             feed.description(manga["data"]["attributes"]["description"]["en"])
@@ -46,10 +46,10 @@ class RSSFeed():
 
         for chapter in chapters["results"]:
             feed_entry = feed.add_entry()
-            feed_entry.id("https://magmadex.org/reader/{}".format(chapter["data"]["id"]))
+            feed_entry.id("https://mangadex.org/chapter/{}".format(chapter["data"]["id"]))
             feed_entry.published(chapter["data"]["attributes"]["publishAt"])
             feed_entry.updated(chapter["data"]["attributes"]["updatedAt"])
-            feed_entry.link(href="https://magmadex.org/reader/{}".format(chapter["data"]["id"]))
+            feed_entry.link(href="https://mangadex.org/chapter/{}".format(chapter["data"]["id"]))
 
             title_desc = "{} - Chapter {}".format(manga["data"]["attributes"]["title"]["en"], chapter["data"]["attributes"]["chapter"])
             if chapter["data"]["attributes"]["title"]:
