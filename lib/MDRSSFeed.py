@@ -71,7 +71,8 @@ class MDRSSFeed():
         while True:
             try:
                 if req_type == "POST":
-                    response = requests.post('{}/{}'.format(self.api_url, request_uri), data=payload)
+                    headers = {'Content-type': 'application/json'}
+                    response = requests.post('{}/{}'.format(self.api_url, request_uri), data=payload, headers=headers)
                 else:
                     response = requests.get('{}/{}'.format(self.api_url, request_uri))
                 if response.status_code == 204:
