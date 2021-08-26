@@ -108,7 +108,7 @@ async def get_manga(manga_id: Union[UUID, int]):
     await make_push_promise(url_for('static', filename='js/bootstrap.min.js'))
     return await render_template('manga.html', manga=manga, chapters=chapters, pagination=pagination)
 
-@app.route('/manga/<manga_id>/rss', methods=["GET"])
+@app.route('/rss/manga/<manga_id>', methods=["GET"])
 @validate()
 async def get_manga_rss(manga_id: Union[UUID, int]):
     """
