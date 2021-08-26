@@ -7,8 +7,11 @@ from quart import Quart, flash, render_template, request, Response, make_push_pr
 from flask_pydantic import validate
 from flask_paginate import Pagination, get_page_parameter, get_page_args
 from flask_bootstrap import Bootstrap
+# This is really only used for the front end to search
 from lib.MangadexAPI import MangadexAPI, MangaNotFound
-from lib.mdrss import RSSFeed
+# This is what actually generates the RSS feeds, should have no dependencies on the bare-bones
+# MangadexAPI above
+from lib.MDRSSFeed import MDRSSFeed
 
 app = Quart(__name__)
 app.secret_key = 'much secret very secure'

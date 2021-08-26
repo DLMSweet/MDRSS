@@ -8,13 +8,13 @@ from uuid import UUID
 import requests
 from feedgen.feed import FeedGenerator
 from lib.rcache import DistributedCache as rcache
-# You only really need this to prevent hitting the backend too often
+# You only really need these to prevent hitting the backend too often
 from lib.ratelimit import RateLimitDecorator as ratelimit
 from lib.ratelimit import sleep_and_retry
 
 module_logger = logging.getLogger('mdapi')
 
-class RSSFeed():
+class MDRSSFeed():
     """
     A basic class to handle the Mangadex API as a RSS feed
     Just returns the last 10 results. You want more? Go to the site.
