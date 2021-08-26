@@ -51,6 +51,11 @@ async def index():
         await flash("No results found", "warning")
     return await render_template('index.html')
 
+@app.route('/stats/', methods=["GET"])
+@validate()
+async def print_stats():
+    return MDAPI.cache_stats()
+
 @app.route('/manga/<manga_id>', methods=["GET"])
 @validate()
 async def get_manga(manga_id: Union[UUID, int]):
@@ -77,8 +82,8 @@ async def get_manga(manga_id: Union[UUID, int]):
             page_parameter="p",
             per_page_parameter="pp",
         )
-
     return await render_template('manga.html', manga=manga, chapters=chapters, pagination=pagination)
+
 
 @app.route('/manga/<manga_id>/rss', methods=["GET"])
 @validate()
@@ -100,11 +105,18 @@ async def read_chapter(chapter_id: UUID):
     Returns the reader page for a chapter,
     loading images directly from the MD@H network
     """
-    chapter = Chapter(api_url=API_URL)
-    chapter.load_from_uuid(chapter_id)
-    images = chapter.get_image_urls()
-    return await render_template('reader.html', images=images)
+    chapter = MDAPI.get_chapter(chapter_id)
+    return await render_template('reader.html', chapter=chapter)
 
+@app.route('/reader/<chapter_id>/<image_id>', methods=["GET"])
+@validate()
+async def get_image(chapter_id: UUID):
+    """
+    Returns the reader page for a chapter,
+    loading images directly from the MD@H network
+    """
+    chapter = MDAPI.get_chapter(chapter_id)
+    return await render_template('reader.html', chapter=chapter)
 
 def get_pagination(**kwargs):
     """Returns pagination settings"""
