@@ -48,7 +48,9 @@ class RSSFeed():
 
     def generate_feed(self, manga_id, language_filter=["en"]):
         if isinstance(manga_id, int):
-            self.manga_id = self.convert_legacy_id(manga_id)
+            manga_id = self.convert_legacy_id(manga_id)
+        if manga_id is None:
+            return None
         chapters = self.get_recent_chapters(manga_id, language_filter)
         manga = self.get_manga(manga_id)
         if manga is None or chapters is None:
@@ -98,16 +100,12 @@ class RSSFeed():
         """
         Let's get a Manga
         """
-        if isinstance(manga_id, int):
-            manga_id = self.convert_legacy_id(manga_id)
         return self.make_request(request_uri='manga/{}'.format(manga_id))
 
     def get_recent_chapters(self, manga_id, language_filter):
         """
         Grab chapters for the Manga
         """
-        if isinstance(manga_id, int):
-            manga_id = self.convert_legacy_id(manga_id)
         locale_filter = "&".join(["locales[]={}".format(x) for x in language_filter])
         return self.make_request(request_uri='manga/{}/feed?order[chapter]=desc&{}'.format(manga_id, locale_filter))
 
@@ -118,6 +116,11 @@ class RSSFeed():
         If we were given a legacy ID, figure out what the new UUID is
         """
         payload = json.dumps({ "type": "manga", "ids": [ manga_id ] })
-        new_uuid = requests.post('{}/legacy/mapping'.format(self.api_url), data=payload).json()[0]["data"]["attributes"]["newId"]
-        self.logger.debug("Converted legacy ID {} to new UUID {}".format(manga_id, new_uuid))
-        return UUID(new_uuid)
+        try:
+            response = requests.post('{}/legacy/mapping'.format(self.api_url), data=payload)
+            new_uuid = response.json()[0]["data"]["attributes"]["newId"]
+            self.logger.debug("Converted legacy ID {} to new UUID {}".format(manga_id, new_uuid))
+            return UUID(new_uuid)
+        except json.decoder.JSONDecodeError:
+            self.logger.warning("Failed to get new UUID for {} - {}".format(manga_id, response))
+            return None
