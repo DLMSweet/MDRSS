@@ -76,7 +76,7 @@ class RSSFeed():
                 elif response.status_code == 429:
                     # Rate limited.
                     self.logger.error("Being ratelimited by the API, waiting for a second...")
-					time.sleep(1)
+                    time.sleep(1)
                 else:
                     # Response wasn't okay
                     self.logger.warn("Something went wrong: {}".format(response.status_code))
