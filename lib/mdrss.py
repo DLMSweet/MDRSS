@@ -8,8 +8,6 @@ from lib.rcache import DistributedCache as rcache
 from lib.ratelimit import RateLimitDecorator as ratelimit
 from lib.ratelimit import RateLimitException, sleep_and_retry
 
-
-
 module_logger = logging.getLogger('mdapi')
 
 class RSSFeed():
