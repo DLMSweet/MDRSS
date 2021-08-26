@@ -139,44 +139,6 @@ async def get_manga_atom(manga_id: Union[UUID, int]):
         abort(404)
     return Response(feed_data, mimetype='text/xml')
 
-@app.route('/reader/<chapter_id>', methods=["GET"])
-@validate()
-async def read_chapter(chapter_id: UUID):
-    """
-    Returns the reader page for a chapter,
-    loading images directly from the MD@H network
-    """
-    try:
-        chapter = MDAPI.get_chapter(chapter_id)
-    except ChapterNotFound:
-        abort(404)
-    await make_push_promise(url_for('static', filename='css/style.css'))
-    await make_push_promise(url_for('static', filename='css/bootstrap.min.css'))
-    await make_push_promise(url_for('static', filename='js/jquery-3.2.1.slim.min.js'))
-    await make_push_promise(url_for('static', filename='js/popper.min.js'))
-    await make_push_promise(url_for('static', filename='js/bootstrap.min.js'))
-    await make_push_promise(url_for('static', filename='css/reader.css'))
-    for image in chapter.image_list:
-        await make_push_promise(url_for("get_image", chapter_id=chapter.chapter_id, image_id=image))
-    return await render_template('reader.html', chapter=chapter)
-
-@app.route('/image/<chapter_id>/<image_id>', methods=["GET"])
-@validate()
-async def get_image(chapter_id: UUID, image_id: str):
-    """
-    Returns an image from the MD@H network
-    Done this way to provide timing and response data to the MD@H network
-    """
-    chapter = MDAPI.get_chapter(chapter_id)
-    image_resp = await chapter.get_image(image_id)
-    try:
-        response = Response(image_resp.content)
-    except AttributeError:
-        # Failed to get an image
-        return Response("Failed  to get image", 500)
-    response.headers['Content-Type'] = image_resp.headers['Content-Type']
-    return response
-
 def get_pagination(**kwargs):
     """Returns pagination settings"""
     kwargs.setdefault("record_name", "records")

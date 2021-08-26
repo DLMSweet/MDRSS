@@ -8,6 +8,7 @@ from uuid import UUID
 import requests
 from feedgen.feed import FeedGenerator
 from lib.rcache import DistributedCache as rcache
+# You only really need this to prevent hitting the backend too often
 from lib.ratelimit import RateLimitDecorator as ratelimit
 from lib.ratelimit import sleep_and_retry
 

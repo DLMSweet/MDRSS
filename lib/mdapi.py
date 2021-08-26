@@ -142,23 +142,9 @@ class MangadexAPI():
             raise APIError("Failed to connect to {}".format(self.api_url)) from connection_error
         return None
 
-    async def send_report(self, image_url, success=False, downloaded_bytes=0, duration=0, is_cached=False):
-        """
-        Sends a report about download speed/success/etc to the backend
-        """
-        report = json.dumps({ "url": image_url, "success": success, "bytes": downloaded_bytes, "duration": duration, "cached": is_cached })
-        self.logger.debug("Sending report: {}".format(report))
-        resp = requests.post("https://api.mangadex.network/report", data=report)
-        if not resp.ok:
-            self.logger.info("Failed to report status of image: {} - {}".format(resp.status_code, resp.reason))
-            self.logger.debug(resp.json())
-            self.logger.debug(report)
-        self.logger.debug("Report finished")
-
 class Chapter():
     """
-    A Chapter object used to get information about a chapter and
-    to pull images for the chapter, including getting a MD@H node
+    A Chapter object used to get information about a chapter
     """
     def __init__(self, manga=None, data=None, api=None):
         """
@@ -184,7 +170,6 @@ class Chapter():
         self.created = self.data['data']['attributes']['createdAt']
         self.language = self.data['data']['attributes']['translatedLanguage']
         self.hash = self.data['data']['attributes']['hash']
-        self.image_list = self.data['data']['attributes']['data']
         self.manga = [x['id'] for x in self.data['relationships'] if x['type'] == 'manga'][0]
 
 
@@ -197,89 +182,6 @@ class Chapter():
             raise ChapterNotFound
         self.data = response
         self.load_data()
-
-    def get_image_server(self):
-        """
-        Attempt to get a MD@H node to pull images from
-        """
-        self.logger.debug("Getting image server")
-        if REDIS.exists('at-home/server/{}'.format(self.chapter_id)):
-            image_server = json.loads(REDIS.get('at-home/server/{}'.format(self.chapter_id)))["baseUrl"]
-            self.logger.debug("Returning image server from cache: {}".format(image_server))
-            return image_server
-        try:
-            self.logger.debug("Requesting an image server for {}".format(self.chapter_id))
-            response = self.api.make_request('at-home/server/{}'.format(self.chapter_id))
-        except RateLimitException:
-            time.sleep(1)
-            return self.get_image_server()
-        return response["baseUrl"]
-
-
-    def get_image_urls(self):
-        """
-        Get the URLs for the images, in case we want to stick them
-        directly into a <img> or pass them to something else
-        """
-        images = []
-        if self.image_server is None:
-            self.image_server = self.get_image_server()
-        for image in self.image_list:
-            images.append("{}/data/{}/{}".format(self.image_server, self.hash, image))
-        return images
-
-    async def get_image(self, image, report=True, tries=0):
-        """
-        Returns an image in a requests Response object
-        """
-        if tries > 0 or self.image_server is None:
-            # Get a new image server
-            self.logger.debug("Getting image server, tries: {} | Chapter: {}".format(tries, self.chapter_id))
-            self.image_server = self.get_image_server()
-        if tries > 3:
-            # Guess we'll die
-            self.logger.warn("Failed to get images for chapter: {}".format(self.chapter_id))
-            return None
-        image_url = "{}/data/{}/{}".format(self.image_server, self.hash, image)
-        try:
-            data = requests.get(image_url)
-        except requests.exceptions.ConnectionError as exc:
-            self.logger.error("Failed to connect to {} - {}".format(self.image_server, exc))
-            self.logger.error("Removing failing server from Redis cache")
-            REDIS.delete('at-home/server/{}'.format(self.chapter_id))
-            if report:
-                await self.api.send_report(image_url)
-            # Give the system time to breathe after we apparently pissed it off.
-            time.sleep(1)
-            return await self.get_image(image, report=report, tries=tries+1)
-        self.logger.debug("Response from image server: {}".format(data.status_code))
-        if data.status_code == 200:
-            if report:
-                is_cached = bool(data.headers['X-Cache'] == "HIT")
-                await self.api.send_report(image_url,
-                                 success=True,
-                                 downloaded_bytes=len(data.content),
-                                 duration=int(data.elapsed.total_seconds()*1000),
-                                 is_cached=is_cached)
-            self.logger.debug("Returning image data")
-            return data
-        # By default, send a failing report. This doesn't get hit if we had a success above.
-        if report:
-            await self.api.send_report(image_url)
-        return None
-
-    async def get_image_bytes(self, image, tries=0):
-        """
-        Returns an image as a base64-encoded string
-        """
-        if tries > 2:
-            return None
-        image_data = await self.get_image(image)
-        if image_data is None:
-            return await self.get_image_bytes(image, tries=tries+1)
-        content_type = image_data.headers['content-type']
-        encoded_image = base64.b64encode(image_data.content).decode('utf-8')
-        return "data:{};base64,{}".format(content_type, encoded_image)
 
     def __str__(self):
         """
