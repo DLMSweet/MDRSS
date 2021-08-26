@@ -123,6 +123,8 @@ class MDRSSFeed():
             self.logger.warning("Failed to get new UUID for {} - {}".format(manga_id, response))
         except AttributeError:
             self.logger.warning("Failed to get new UUID for {} - {}".format(manga_id, response))
+        except TypeError:
+            self.logger.warning("Failed to get new UUID for {} - {}".format(manga_id, response))
         return None
 
     def __str__(self):
