@@ -4,6 +4,7 @@
 import logging
 import time
 import json
+from uuid import UUID
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import base64
 from redis import StrictRedis

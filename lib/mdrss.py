@@ -37,7 +37,10 @@ class RSSFeed():
         fg.title(manga["data"]["attributes"]["title"]["en"])
         fg.link(href="https://magmadex.org/manga/{}".format(manga_id))
         fg.link(href="https://magmadex.org/rss/manga/{}".format(manga_id), rel="self")
-        fg.description(manga["data"]["attributes"]["description"]["en"])
+        if manga["data"]["attributes"]["description"]["en"]:
+            fg.description(manga["data"]["attributes"]["description"]["en"])
+        else:
+            fg.description("No Content")
         
         for chapter in chapters["results"]:
             fe = fg.add_entry()
