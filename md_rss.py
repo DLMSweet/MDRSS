@@ -7,7 +7,7 @@ from quart import Quart, flash, render_template, request, Response, make_push_pr
 from flask_pydantic import validate
 from flask_paginate import Pagination, get_page_parameter, get_page_args
 from flask_bootstrap import Bootstrap
-from lib.mdapi import MangadexAPI, MangaNotFound, ChapterNotFound
+from lib.MangadexAPI import MangadexAPI, MangaNotFound
 from lib.mdrss import RSSFeed
 
 app = Quart(__name__)
@@ -84,29 +84,12 @@ async def get_manga(manga_id: Union[UUID, int]):
         await flash("Could not find manga with ID of {}".format(manga_id), "warning")
         return redirect(url_for('index'))
 
-    page = request.args.get(get_page_parameter(), type=int, default=1)
-    page, per_page, offset = get_page_args(page_parameter="p", per_page_parameter="pp", pp=10) # pylint: disable=unbalanced-tuple-unpacking
-    if per_page:
-        chapters = manga.get_chapters(offset=offset)
-    if chapters:
-        pagination = get_pagination(
-            p=page,
-            pp=per_page,
-            total=manga.total_chapters,
-            record_name="chapters",
-            format_total=True,
-            format_number=True,
-            page_parameter="p",
-            per_page_parameter="pp",
-        )
-    else:
-        pagination = None
     await make_push_promise(url_for('static', filename='css/style.css'))
     await make_push_promise(url_for('static', filename='css/bootstrap.min.css'))
     await make_push_promise(url_for('static', filename='js/jquery-3.2.1.slim.min.js'))
     await make_push_promise(url_for('static', filename='js/popper.min.js'))
     await make_push_promise(url_for('static', filename='js/bootstrap.min.js'))
-    return await render_template('manga.html', manga=manga, chapters=chapters, pagination=pagination)
+    return await render_template('manga.html', manga=manga)
 
 @app.route('/rss/manga/<manga_id>', methods=["GET"])
 @validate()

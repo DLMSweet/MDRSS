@@ -9,10 +9,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import base64
 from redis import StrictRedis
 import requests
-import bbcode
 from lib.rcache import DistributedCache as rcache
 from lib.ratelimit import RateLimitDecorator as ratelimit
 from lib.ratelimit import RateLimitException, sleep_and_retry
+from lib.Manga import Manga
 
 logging.basicConfig(filename='/tmp/tmdfe.log', format='%(asctime)s - %(levelname)s - %(message)s', level=logging.DEBUG)
 module_logger = logging.getLogger('mdapi')
@@ -31,11 +31,6 @@ class APIRateLimit(Exception):
 class MangaNotFound(Exception):
     """
     Manga wasn't found bro
-    """
-
-class ChapterNotFound(Exception):
-    """
-    Chapter's not here man
     """
 
 class MangadexAPI():
@@ -99,18 +94,6 @@ class MangadexAPI():
             self.logger.debug("No results found for {}".format(title))
         return (0, None)
 
-    def get_chapter(self, chapter_id):
-        """
-        Returns a chapter based on it's ID
-        """
-        chapter = Chapter(api=self)
-        try:
-            chapter.load_from_uuid(chapter_id)
-        except APIError as exc:
-            self.logger.error("Failed to return chapter: {}".format(exc))
-            raise
-        return chapter
-
     @rcache
     @sleep_and_retry
     @ratelimit(calls=5, period=1)
@@ -142,86 +125,3 @@ class MangadexAPI():
             raise APIError("Failed to connect to {}".format(self.api_url)) from connection_error
         return None
 
-class Chapter():
-    """
-    A Chapter object used to get information about a chapter
-    """
-    def __init__(self, manga=None, data=None, api=None):
-        """
-        Just inits the object, nothing to see here. move along
-        """
-        self.logger = logging.getLogger('mdapi.chapter')
-        self.api = api
-        self.data = data
-        self.manga = manga
-        self.image_server = None
-        if self.data:
-            self.load_data()
-
-    def load_data(self):
-        """
-        Copy the data out into attributes to make it easier to
-        read without dealing with the JSON object
-        """
-        self.chapter_id = self.data["data"]["id"]
-        self.chapter = self.data['data']['attributes']['chapter']
-        self.volume = self.data['data']['attributes']['volume']
-        self.published = self.data['data']['attributes']['publishAt']
-        self.created = self.data['data']['attributes']['createdAt']
-        self.language = self.data['data']['attributes']['translatedLanguage']
-        self.hash = self.data['data']['attributes']['hash']
-        self.manga = [x['id'] for x in self.data['relationships'] if x['type'] == 'manga'][0]
-
-
-    def load_from_uuid(self, chapter_id):
-        """
-        Get the chapter information from the API based on the UUID
-        """
-        response = self.api.make_request('chapter/{}'.format(chapter_id))
-        if response is None:
-            raise ChapterNotFound
-        self.data = response
-        self.load_data()
-
-    def __str__(self):
-        """
-        Returns some basic information about the chapter
-        """
-        return "Volume {}, Chapter {} ({})".format(self.volume, self.chapter, self.language)
-
-class Manga():
-    """
-    Basic class to handle manga
-    """
-    def __init__(self, manga_id, api):
-        """
-        Nothing to see here, move along.
-        """
-        self.logger = logging.getLogger('mdapi.manga')
-        self.api = api
-        self.manga_id = manga_id
-        self.total_chapters = None
-        self.load_data()
-
-    def load_data(self):
-        """
-        Loads the data for a Manga UUID from the API
-        """
-        self.data = self.api.make_request('manga/{}'.format(self.manga_id))
-        if self.data is None:
-            raise MangaNotFound
-        self.title = self.data["data"]["attributes"]["title"]["en"]
-        parser = bbcode.Parser(escape_html=False)
-        parser.add_simple_formatter('spoiler', '<span class="spoiler">%(value)s</span>')
-        self.description = parser.format(self.data["data"]["attributes"]["description"]["en"])
-        self.alt_titles = self.data["data"]["attributes"]["altTitles"]
-
-    def get_chapters(self, limit=10, offset=0, language="en"):
-        """
-        Returns a list of chapters for this Manga
-        """
-        # TODO: Come back to this later. Search said 54 results, only 26 actually returned with offsets.
-        #response = requests.get('{}/chapter?manga={}&limit={}&offset={}&translatedLanguage={}'.format(self.api, self.manga_id, limit, offset, language))
-        response = self.api.make_request('chapter?manga={}&limit={}&offset={}'.format(self.manga_id, limit, offset))
-        self.total_chapters = response["total"]
-        return [ Chapter(self.manga_id, x, self.api) for x in response["results"] ]
