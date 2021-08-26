@@ -7,7 +7,7 @@ from quart import Quart, flash, render_template, request, Response, make_push_pr
 from flask_pydantic import validate
 from flask_paginate import Pagination, get_page_parameter, get_page_args
 from flask_bootstrap import Bootstrap
-from lib.mdapi import MangadexAPI, APIError, MangaNotFound
+from lib.mdapi import MangadexAPI, APIError, MangaNotFound, ChapterNotFound
 from lib.mdrss import RSSFeed
 
 app = Quart(__name__)
@@ -23,7 +23,7 @@ async def page_not_found(error):
     """
     Flash them. Let them look upon their error
     """
-    await flash("That page doesn't exist: {}".format(error), "warning")
+    await flash("{}: That page doesn't exist".format(error), "warning")
     return redirect(url_for('index'))
 
 @app.errorhandler(400)
@@ -31,7 +31,7 @@ async def validation_error(error):
     """
     Flash them. Let them look upon their error
     """
-    await flash("Something was wrong with your request: {}".format(error), "warning")
+    await flash("{}: Something was wrong with your request".format(error), "warning")
     return redirect(url_for('index'))
 
 @app.route('/', methods=["GET"])
@@ -129,7 +129,7 @@ async def read_chapter(chapter_id: UUID):
     """
     try:
         chapter = MDAPI.get_chapter(chapter_id)
-    except APIError:
+    except ChapterNotFound:
         abort(404)
     await make_push_promise(url_for('static', filename='css/style.css'))
     await make_push_promise(url_for('static', filename='css/bootstrap.min.css'))

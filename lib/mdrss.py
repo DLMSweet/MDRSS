@@ -1,6 +1,7 @@
 # pylint: disable=line-too-long
 import logging
 import json
+from uuid import UUID
 from redis import StrictRedis
 import requests
 from feedgen.feed import FeedGenerator
@@ -21,6 +22,18 @@ def cache(func):
         return response
     return wrapper
 
+def cache_id(func):
+    def wrapper(*args, **kwargs):
+        if REDIS.exists(str(args[1])):
+            module_logger.warn("Got {} from cache".format(str(args[1])))
+            return UUID(REDIS.get(str(args[1])))
+        response = func(*args, **kwargs)
+        if response:
+            REDIS.setex(str(args[1]), 3600, str(response))
+            module_logger.warn("Put {} into cache with 60m TTL".format(str(args[1])))
+        return response
+    return wrapper
+
 class RSSFeed():
     """
     A basic class to handle the Mangadex API as a RSS feed
@@ -34,8 +47,12 @@ class RSSFeed():
         self.api_url = api_url
 
     def generate_feed(self, manga_id):
+        if isinstance(manga_id, int):
+            self.manga_id = self.convert_legacy_id(manga_id)
         chapters = self.get_recent_chapters(manga_id)
         manga = self.get_manga(manga_id)
+        if manga is None or chapters is None:
+            return None
         fg = FeedGenerator()
         fg.id(manga["data"]["attributes"]["title"]["en"])
         fg.title(manga["data"]["attributes"]["title"]["en"])
@@ -81,10 +98,25 @@ class RSSFeed():
         """
         Let's get a Manga
         """
+        if isinstance(manga_id, int):
+            manga_id = self.convert_legacy_id(manga_id)
         return self.make_request(request_uri='manga/{}'.format(manga_id))
 
     def get_recent_chapters(self, manga_id):
         """
         Grab chapters for the Manga
         """
+        if isinstance(manga_id, int):
+            manga_id = self.convert_legacy_id(manga_id)
         return self.make_request(request_uri='chapter?manga={}&order[updatedAt]=asc'.format(manga_id))
+
+
+    @cache_id
+    def convert_legacy_id(self, manga_id):
+        """
+        If we were given a legacy ID, figure out what the new UUID is
+        """
+        payload = json.dumps({ "type": "manga", "ids": [ manga_id ] })
+        new_uuid = requests.post('{}/legacy/mapping'.format(self.api_url), data=payload).json()[0]["data"]["attributes"]["newId"]
+        self.logger.debug("Converted legacy ID {} to new UUID {}".format(manga_id, new_uuid))
+        return UUID(new_uuid)

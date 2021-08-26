@@ -1,5 +1,7 @@
 # pylint: disable=line-too-long
+# pylint: disable=logging-format-interpolation
 import logging
+# pylint: disable=missing-module-docstring
 import time
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -8,7 +10,6 @@ from redis import StrictRedis
 from ratelimit import limits, sleep_and_retry
 import requests
 import bbcode
-from pprint import pprint
 
 module_logger = logging.getLogger('mdapi')
 REDIS = StrictRedis(host="localhost", decode_responses=True)
@@ -23,7 +24,21 @@ class APIRateLimit(Exception):
     We're trying to hit the API too fast
     """
 
+class MangaNotFound(Exception):
+    """
+    Manga wasn't found bro
+    """
+
+class ChapterNotFound(Exception):
+    """
+    Chapter's not here man
+    """
+
 def cache(func):
+    """
+    Handles caching results from the API into Redis to reduce hits on the API
+    Also provides communication between workers
+    """
     def wrapper(*args, **kwargs):
         if REDIS.exists(str(kwargs['request_uri'])):
             module_logger.debug("Got {} from cache".format(kwargs['request_uri']))
@@ -36,12 +51,17 @@ def cache(func):
     return wrapper
 
 def lock(lock_name="global_lock"):
+    """
+    Provides a locking mechanism to make sure workers aren't all trying to request
+    the same thing from the API all at once, when one could perform the lookup, cache it, 
+    and everyone else can pull from there.
+    """
     def wrapper(func):
         def inner_wrapper(*args, **kwargs):
             try:
-                with REDIS.lock(lock_name, blocking_timeout=5) as lock:
+                with REDIS.lock(lock_name, blocking_timeout=5) as rlock: # pylint: disable=unused-variable
                     results = func(*args, **kwargs)
-            except LockError:
+            except:
                 results = None
             return results
         return inner_wrapper
@@ -58,10 +78,30 @@ class MangadexAPI():
         self.logger = logging.getLogger('mdapi.api')
         self.api_url = api_url
 
+    def convert_legacy_id(self, manga_id):
+        """
+        If we were given a legacy ID, figure out what the new UUID is
+        """
+        payload = json.dumps({ "type": "manga", "ids": [ manga_id ] })
+        try:
+            response = requests.post('{}/legacy/mapping'.format(self.api_url), data=payload).json()
+            new_uuid = response[0]["data"]["attributes"]["newId"]
+            self.logger.debug("Converted legacy ID {} to new UUID {}".format(manga_id, new_uuid))
+            return new_uuid
+        except IndexError:
+            self.logger.warning("Failed  to get new UUID for {} - {}".format(manga_id, response))
+            raise MangaNotFound
+        return None
+
     def get_manga(self, manga_id):
         """
         Returns a Manga based on it's UUID
         """
+        if isinstance(manga_id, int):
+            try:
+                manga_id = self.convert_legacy_id(manga_id)
+            except MangaNotFound:
+                return None
         return Manga(manga_id, api=self)
 
     def search_manga(self, title, offset=0):
@@ -70,19 +110,22 @@ class MangadexAPI():
         """
         results = self.make_request(request_uri='manga?title={}&offset={}'.format(title, offset))
         return_results = []
-        if results["results"]:
-            with ThreadPoolExecutor(max_workers=5) as executor:
-                future_to_manga = {executor.submit(Manga, x["data"]["id"], api=self): x for x in results['results']}
-                for future in as_completed(future_to_manga):
-                    manga = future_to_manga[future]
-                    try:
-                        manga_cl = future.result()
-                    except Exception as exc:
-                        print('Generated an exception: {}'.format(exc))
-                    else:
-                        return_results.append(manga_cl)
-            return (results["total"], return_results)
-        return None
+        try:
+            if results["results"]:
+                with ThreadPoolExecutor(max_workers=5) as executor:
+                    future_to_manga = {executor.submit(Manga, x["data"]["id"], api=self): x for x in results['results']}
+                    for future in as_completed(future_to_manga):
+                        manga = future_to_manga[future] # pylint: disable=unused-variable
+                        try:
+                            manga_cl = future.result()
+                        except Exception as exc:
+                            print('Generated an exception: {}'.format(exc))
+                        else:
+                            return_results.append(manga_cl)
+                return (results["total"], return_results)
+        except TypeError:
+            self.logger.debug("No results found for {}".format(title))
+        return (0, None)
 
     def get_chapter(self, chapter_id):
         """
@@ -101,7 +144,7 @@ class MangadexAPI():
     @lock(lock_name="api_server")
     @cache
     @sleep_and_retry
-    @limits(calls=5, period=1)    
+    @limits(calls=5, period=1)
     def make_request(self, request_uri=None):
         """
         Class to handle making requests to the MD API, rate limited
@@ -159,28 +202,24 @@ class Chapter():
         Copy the data out into attributes to make it easier to
         read without dealing with the JSON object
         """
-        try:
-            self.chapter_id = self.data["data"]["id"]
-            self.chapter = self.data['data']['attributes']['chapter']
-            self.volume = self.data['data']['attributes']['volume']
-            self.published = self.data['data']['attributes']['publishAt']
-            self.created = self.data['data']['attributes']['createdAt']
-            self.language = self.data['data']['attributes']['translatedLanguage']
-            self.hash = self.data['data']['attributes']['hash']
-            self.image_list = self.data['data']['attributes']['data']
-            self.manga = [x['id'] for x in self.data['relationships'] if x['type'] == 'manga'][0]
-        except KeyError:
-            pprint(self.data)
-            raise
-        except TypeError:
-            pprint(self.data['relationships'])
-            raise
+        self.chapter_id = self.data["data"]["id"]
+        self.chapter = self.data['data']['attributes']['chapter']
+        self.volume = self.data['data']['attributes']['volume']
+        self.published = self.data['data']['attributes']['publishAt']
+        self.created = self.data['data']['attributes']['createdAt']
+        self.language = self.data['data']['attributes']['translatedLanguage']
+        self.hash = self.data['data']['attributes']['hash']
+        self.image_list = self.data['data']['attributes']['data']
+        self.manga = [x['id'] for x in self.data['relationships'] if x['type'] == 'manga'][0]
 
-    def load_from_uuid(self, chapter_id, tries=0):
+
+    def load_from_uuid(self, chapter_id):
         """
         Get the chapter information from the API based on the UUID
         """
         response = self.api.make_request(request_uri='chapter/{}'.format(chapter_id))
+        if response is None:
+            raise ChapterNotFound
         self.data = response
         self.load_data()
 
@@ -235,10 +274,7 @@ class Chapter():
             return await self.get_image(image, report=report, tries=tries+1)
         if data.status_code == 200:
             if report:
-                if data.headers['X-Cache'] == "HIT":
-                    is_cached = True
-                else:
-                    is_cached = False
+                is_cached = bool(data.headers['X-Cache'] == "HIT")
                 await self.api.send_report(image_url,
                                  success=True,
                                  downloaded_bytes=len(data.content),
@@ -279,28 +315,22 @@ class Manga():
         """
         self.logger = logging.getLogger('mdapi.manga')
         self.api = api
-        if isinstance(manga_id, int):
-            self.manga_id = self.convert_legacy_id(manga_id)
-        else:
-            self.manga_id = manga_id
+        self.manga_id = manga_id
+        self.total_chapters = None
         self.load_data()
-        
+
     def load_data(self):
-        self.data = self.api.make_request(request_uri='manga/{}'.format(self.manga_id))["data"]
-        self.title = self.data["attributes"]["title"]["en"]
+        """
+        Loads the data for a Manga UUID from the API
+        """
+        self.data = self.api.make_request(request_uri='manga/{}'.format(self.manga_id))
+        if self.data is None:
+            raise MangaNotFound
+        self.title = self.data["data"]["attributes"]["title"]["en"]
         parser = bbcode.Parser(escape_html=False)
         parser.add_simple_formatter('spoiler', '<span class="spoiler">%(value)s</span>')
-        self.description = parser.format(self.data["attributes"]["description"]["en"])
-        self.alt_titles = self.data["attributes"]["altTitles"]
-
-    def convert_legacy_id(self, manga_id):
-        """
-        If we were given a legacy ID, figure out what the new UUID is
-        """
-        payload = json.dumps({ "type": "manga", "ids": [ manga_id ] })
-        new_uuid = requests.post('{}/legacy/mapping'.format(self.api), data=payload).json()[0]["data"]["attributes"]["newId"]
-        self.logger.debug("Converted legacy ID {} to new UUID {}".format(manga_id, new_uuid))
-        return new_uuid
+        self.description = parser.format(self.data["data"]["attributes"]["description"]["en"])
+        self.alt_titles = self.data["data"]["attributes"]["altTitles"]
 
     def get_chapters(self, limit=10, offset=0, language="en"):
         """
