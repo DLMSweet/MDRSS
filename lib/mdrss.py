@@ -103,7 +103,7 @@ class RSSFeed():
         """
         Grab chapters for the Manga
         """
-        locale_filter = "&".join(["locales[]={}".format(x) for x in language_filter])
+        locale_filter = "&".join(["translatedLanguage[]={}".format(x) for x in language_filter])
         return self.make_request('manga/{}/feed?order[chapter]=desc&{}'.format(manga_id, locale_filter))
 
 
