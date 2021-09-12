@@ -45,16 +45,16 @@ class MDRSSFeed():
         else:
             feed.description("No Content")
 
-        for chapter in chapters["results"]:
+        for chapter in chapters["data"]:
             feed_entry = feed.add_entry()
-            feed_entry.id("https://mangadex.org/chapter/{}".format(chapter["data"]["id"]))
-            feed_entry.published(chapter["data"]["attributes"]["publishAt"])
-            feed_entry.updated(chapter["data"]["attributes"]["updatedAt"])
-            feed_entry.link(href="https://mangadex.org/chapter/{}".format(chapter["data"]["id"]))
+            feed_entry.id("https://mangadex.org/chapter/{}".format(chapter["id"]))
+            feed_entry.published(chapter["attributes"]["publishAt"])
+            feed_entry.updated(chapter["attributes"]["updatedAt"])
+            feed_entry.link(href="https://mangadex.org/chapter/{}".format(chapter["id"]))
 
-            title_desc = "{} - Chapter {}".format(manga["data"]["attributes"]["title"]["en"], chapter["data"]["attributes"]["chapter"])
-            if chapter["data"]["attributes"]["title"]:
-                title_desc = title_desc + " | {}".format(chapter["data"]["attributes"]["title"])
+            title_desc = "{} - Chapter {}".format(manga["data"]["attributes"]["title"]["en"], chapter["attributes"]["chapter"])
+            if chapter["attributes"]["title"]:
+                title_desc = title_desc + " | {}".format(chapter["attributes"]["title"])
             feed_entry.title(title_desc)
             feed_entry.description(title_desc)
         if feedtype == "atom":
@@ -116,7 +116,7 @@ class MDRSSFeed():
         payload = json.dumps({ "type": "manga", "ids": [ manga_id ] })
         response = self.make_request('legacy/mapping', payload=payload, req_type="POST")
         try:
-            new_uuid = response[0]["data"]["attributes"]["newId"]
+            new_uuid = response[0]["attributes"]["newId"]
             self.logger.debug("Converted legacy ID {} to new UUID {}".format(manga_id, new_uuid))
             return UUID(new_uuid)
         except json.decoder.JSONDecodeError:

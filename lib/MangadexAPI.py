@@ -78,9 +78,9 @@ class MangadexAPI():
         results = self.make_request('manga?title={}&offset={}'.format(title, offset))
         return_results = []
         try:
-            if results["results"]:
+            if results["data"]:
                 with ThreadPoolExecutor(max_workers=5) as executor:
-                    future_to_manga = {executor.submit(Manga, x["data"]["id"], api=self): x for x in results['results']}
+                    future_to_manga = {executor.submit(Manga, x["id"], api=self): x for x in results['data']}
                     for future in as_completed(future_to_manga):
                         manga = future_to_manga[future] # pylint: disable=unused-variable
                         try:
