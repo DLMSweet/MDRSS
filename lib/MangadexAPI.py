@@ -51,7 +51,7 @@ class MangadexAPI():
         payload = json.dumps({ "type": "manga", "ids": [ manga_id ] })
         response = self.make_request('legacy/mapping', payload=payload, req_type="POST")
         try:
-            new_uuid = response[0]["data"]["attributes"]["newId"]
+            new_uuid = response["data"][0]["attributes"]["newId"]
             self.logger.debug("Converted legacy ID {} to new UUID {}".format(manga_id, new_uuid))
             return UUID(new_uuid)
         except json.decoder.JSONDecodeError:
