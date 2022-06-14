@@ -5,7 +5,7 @@ After=nginx.service
 [Service]
 User=nobody
 WorkingDirectory=/opt/tmdfe
-ExecStart=/opt/tmdfe/venv/bin/hypercorn md_frontend:app -w 8
+ExecStart=/opt/tmdfe/venv/bin/hypercorn md_frontend:app -w 8 --access-logfile -
 Restart=always
 
 [Install]
