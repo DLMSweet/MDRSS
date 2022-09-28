@@ -11,6 +11,7 @@ Modified to use redis for locking and timing
 # pylint: disable=line-too-long
 # pylint: disable=logging-format-interpolation
 # pylint: disable=missing-module-docstring
+import os
 from functools import wraps
 import time
 import threading
@@ -58,7 +59,11 @@ class RateLimitDecorator():
         :param bool raise_on_limit: A boolean allowing the caller to avoiding rasing an exception.
         '''
         self.logger = logging.getLogger('mdapi.ratelimit')
-        self.__redis = StrictRedis(host="localhost", decode_responses=True)
+        try:
+            redis_host = os.environ['REDIS_HOST']
+        except KeyError:
+            redis_host = "localhost"
+        self.__redis = StrictRedis(host=redis_host, decode_responses=True)
         self.clamped_calls = calls
         self.period = period
         self.clock = clock
