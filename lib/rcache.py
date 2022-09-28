@@ -8,6 +8,7 @@ would run into errors since this *only* looks at the arguments and not the funct
 # pylint: disable=line-too-long
 # pylint: disable=logging-format-interpolation
 # pylint: disable=missing-module-docstring
+import os
 import logging
 from functools import partial
 import json
@@ -19,7 +20,11 @@ class DistributedCache():
     Also provides communication between workers
     """
     def __init__(self, function):
-        self.__redis = StrictRedis(host="localhost", decode_responses=True)
+        try:
+            redis_host = os.environ['REDIS_HOST']
+        except KeyError:
+            redis_host = "localhost"
+        self.__redis = StrictRedis(host=redis_host, decode_responses=True)
         self.logger = logging.getLogger('mdapi.redis')
         self.function = function
 
