@@ -1,6 +1,6 @@
 # Summary
 
-This is a rather terrible RSS feed generator for Mangadex.
+This is a rather terrible RSS feed generator for Mangadex. This is what runs magmadex.org
 
 It uses a flask service, Nginx, and redis for caching. 
 
@@ -8,6 +8,7 @@ Because MD has rather strict API limits, the caching helps prevent you from gett
 
 This has only been tested on Ubuntu 20.04, but in theory anything with Python 3.8 or newer should work. It's also worth noting that it's been a minute (read: a while) since I last set this up. This shuld be all that's required, from what I recall. 
 
+There is now a Dockerfile and a docker-compose, but it doesn't handle nginx. 
 
 ## Pre-Reqs
 
