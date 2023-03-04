@@ -48,7 +48,7 @@ class MDRSSFeed():
         for chapter in chapters["data"]:
             feed_entry = feed.add_entry()
             feed_entry.id("https://mangadex.org/chapter/{}".format(chapter["id"]))
-            feed_entry.published(chapter["attributes"]["publishAt"])
+            feed_entry.published(chapter["attributes"]["readableAt"])
             feed_entry.updated(chapter["attributes"]["updatedAt"])
             feed_entry.link(href="https://mangadex.org/chapter/{}".format(chapter["id"]))
 
