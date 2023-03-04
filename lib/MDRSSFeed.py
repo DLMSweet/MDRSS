@@ -36,8 +36,14 @@ class MDRSSFeed():
         if manga is None or chapters is None:
             return None
         feed = FeedGenerator()
-        feed.id(manga["data"]["attributes"]["title"]["en"])
-        feed.title(manga["data"]["attributes"]["title"]["en"])
+        try:
+            id_title = manga["data"]["attributes"]["title"]["en"]
+        except KeyError:
+            # Take the first key we can get?
+            id_title = list(manga["data"]["attributes"]["title"].values())[0]
+        feed.id(id_title)
+        feed.title(id_title)
+
         feed.link(href="https://mangadex.org/title/{}".format(manga_id))
         feed.link(href="https://mangadex.org/title/{}".format(manga_id), rel="self")
         if manga["data"]["attributes"]["description"]["en"]:
@@ -52,7 +58,7 @@ class MDRSSFeed():
             feed_entry.updated(chapter["attributes"]["updatedAt"])
             feed_entry.link(href="https://mangadex.org/chapter/{}".format(chapter["id"]))
 
-            title_desc = "{} - Chapter {}".format(manga["data"]["attributes"]["title"]["en"], chapter["attributes"]["chapter"])
+            title_desc = "{} - Chapter {}".format(id_title, chapter["attributes"]["chapter"])
             if chapter["attributes"]["title"]:
                 title_desc = title_desc + " | {}".format(chapter["attributes"]["title"])
             feed_entry.title(title_desc)
