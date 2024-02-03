@@ -26,7 +26,7 @@ class Manga():
         if self.data is None:
             raise MangaNotFound
         # Try to load the english title first, and failing that try the first available one.
-        possible_langs = self.data["data"]["attributes"]["title"].keys()
+        possible_langs = list(self.data["data"]["attributes"]["title"].keys())
         try:
             self.title = self.data["data"]["attributes"]["title"]["en"]
         except KeyError:
@@ -36,7 +36,7 @@ class Manga():
         # Check if a description exists first
         possible_langs = None
         if self.data["data"]["attributes"]["description"]:
-            possible_langs = self.data["data"]["attributes"]["description"].keys()
+            possible_langs = list(self.data["data"]["attributes"]["description"].keys())
             # Try to load the english one, because I'm english.
             try:
                 self.description = parser.format(self.data["data"]["attributes"]["description"]["en"])
