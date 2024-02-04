@@ -2,6 +2,7 @@
 # pylint: disable=logging-format-interpolation
 # pylint: disable=missing-module-docstring
 import logging
+import re
 import bbcode
 
 class Manga():
@@ -18,6 +19,31 @@ class Manga():
         self.total_chapters = None
         self.load_data()
 
+    def handle_tags(self, matched):
+        text = matched.group(2)
+        if matched.group(1) == "**":
+            return f'<strong>{text}</strong>'
+        else:
+            return f'<em><strong>{text}</strong></em>'
+
+    def handle_urls(self, matched):
+        text = matched.group(2)
+        url = matched.group(3)
+        if matched.group(1):
+            # Embed
+            return f'<img src="{url}" alt="{text}">'
+        else:
+            return f'<a href="{url}">{text}</a>'
+
+    def parse_description(self, description: str):
+        parser = bbcode.Parser(escape_html=False, replace_links=False)
+        parser.add_simple_formatter('spoiler', '<span class="spoiler">%(value)s</span>')
+        parser.add_simple_formatter('***', '<em><strong>%(value)s</strong></em>')
+
+        parsed_data = re.sub(r'(!)?\[(.*)\]\(<?(https?://.*)>?\)', self.handle_urls, description, flags=re.IGNORECASE)
+        parsed_data = re.sub(r'([\*]{2,3})(.*?)([\*]{2,3})', self.handle_tags, parsed_data)
+        self.description = parser.format(parsed_data)
+
     def load_data(self):
         """
         Loads the data for a Manga UUID from the API
@@ -31,18 +57,16 @@ class Manga():
             self.title = self.data["data"]["attributes"]["title"]["en"]
         except KeyError:
              self.title = self.data["data"]["attributes"]["title"][possible_langs[0]]
-        parser = bbcode.Parser(escape_html=False)
-        parser.add_simple_formatter('spoiler', '<span class="spoiler">%(value)s</span>')
         # Check if a description exists first
         possible_langs = None
         if self.data["data"]["attributes"]["description"]:
             possible_langs = list(self.data["data"]["attributes"]["description"].keys())
             # Try to load the english one, because I'm english.
             try:
-                self.description = parser.format(self.data["data"]["attributes"]["description"]["en"])
+                self.parse_description(self.data["data"]["attributes"]["description"]["en"])
             except KeyError:
                 # Failing that, load the first possible one.
-                self.description = parser.format(self.data["data"]["attributes"]["description"][possible_langs[0]])
+                self.parse_description(self.data["data"]["attributes"]["description"][possible_langs[0]])
         else:
             self.description = 'No Description'
         self.alt_titles = self.data["data"]["attributes"]["altTitles"]

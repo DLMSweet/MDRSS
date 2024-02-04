@@ -39,7 +39,7 @@
    <tr>
     <td>{{ loop.index + pagination.skip }}</td>
     <td><a href="{{ url_for('get_manga', manga_id=result.manga_id ) }}">{{ result.title }}</a></td>
-    <td>{{ result.description | safe | truncate(100) }}</td>
+    <td>{{ result.description | safe }}</td>
    </tr>
    {% endfor %}
   </table>
