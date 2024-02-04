@@ -2,7 +2,10 @@
 # pylint: disable=missing-module-docstring
 from uuid import UUID
 from typing import Union
-import quart.flask_patch # pylint: disable=unused-import
+try:
+    import quart.flask_patch # pylint: disable=unused-import
+except ImportError:
+    import quart_flask_patch # pylint: disable=unused-import
 from quart import Quart, flash, render_template, request, Response, make_push_promise, url_for, redirect, abort
 from flask_pydantic import validate
 from flask_paginate import Pagination, get_page_parameter, get_page_args
