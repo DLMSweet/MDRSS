@@ -40,7 +40,7 @@ class Manga():
         parser.add_simple_formatter('spoiler', '<span class="spoiler">%(value)s</span>')
         parser.add_simple_formatter('***', '<em><strong>%(value)s</strong></em>')
 
-        parsed_data = re.sub(r'(!)?\[(.*)\]\(<?(https?://.*)>?\)', self.handle_urls, description, flags=re.IGNORECASE)
+        parsed_data = re.sub(r'(!)?\[(.*?)\]\(<?(https?://.*?)>?\)', self.handle_urls, description, flags=re.IGNORECASE)
         parsed_data = re.sub(r'([\*]{2,3})(.*?)([\*]{2,3})', self.handle_tags, parsed_data)
         self.description = parser.format(parsed_data)
 
