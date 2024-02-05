@@ -14,7 +14,9 @@
   <ul>
   <!-- TODO: Why are they all indexed as English? -->
   {% for alt_title in manga.alt_titles %}
-    <li>{{ alt_title["en"] | safe }}
+    {% for key,value in alt_title.items() %}
+    <li>{{ key | safe }} - {{ value | safe }}
+    {% endfor %}
   {% endfor %}
   </ul>
   <hr class="my-4">
